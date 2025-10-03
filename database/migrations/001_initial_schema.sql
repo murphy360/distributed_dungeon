@@ -449,6 +449,26 @@ CREATE INDEX idx_spells_search ON spells USING gin(to_tsvector('english', name |
 
 COMMIT;
 
--- Log successful initialization
-INSERT INTO game_events (session_id, event_type, data) 
-VALUES (gen_random_uuid(), 'database_initialized', '{"message": "Database schema created successfully", "version": "1.0.0"}');
+-- Create a sample session first, then log initialization
+DO $$
+DECLARE
+    session_uuid UUID := gen_random_uuid();
+    user_uuid UUID := gen_random_uuid();
+    dungeon_uuid UUID := gen_random_uuid();
+BEGIN
+    -- Insert a sample user first
+    INSERT INTO users (id, username, email, password_hash, role) 
+    VALUES (user_uuid, 'system', 'system@distributeddungeon.com', 'system', 'admin');
+    
+    -- Insert a sample dungeon first
+    INSERT INTO dungeons (id, name, description, min_level, max_level, max_players, created_by) 
+    VALUES (dungeon_uuid, 'System Initialization Dungeon', 'Initial system setup dungeon', 1, 20, 6, user_uuid);
+    
+    -- Insert a sample session
+    INSERT INTO sessions (id, dungeon_id, dm_id, status, mode) 
+    VALUES (session_uuid, dungeon_uuid, user_uuid, 'active', 'manual');
+    
+    -- Log successful initialization
+    INSERT INTO game_events (session_id, event_type, data) 
+    VALUES (session_uuid, 'database_initialized', '{"message": "Database schema created successfully", "version": "1.0.0"}');
+END $$;

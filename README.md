@@ -1,8 +1,200 @@
-# Distributed Dungeon - Microservices RPG Platform
+# Distributed Dungeon
 
-## Overview
+A distributed RPG platform built with microservices architecture, featuring AI-powered dungeon masters, real-time gameplay, and multi-platform communication.
 
-Distributed Dungeon is a sophisticated, containerized RPG platform built with microservices architecture. It enables multiplayer role-playing games with AI-powered characters, dynamic rule systems, and multi-platform communication support.
+## 🎯 Features
+
+- **Microservices Architecture**: Six specialized services for different game aspects
+- **AI-Powered NPCs**: Gemini LLM integration for intelligent monster and NPC roleplay
+- **Real-time Gameplay**: WebSocket-based live game sessions
+- **Multi-platform Communication**: Discord and Meshtastic integration
+- **Complete RPG System**: Full D&D 5e compatible rule engine
+- **Containerized Deployment**: Fully containerized with Docker for easy deployment
+
+## 🏗️ Architecture
+
+### Services Overview
+
+1. **Dungeon Master Service** (Port 3001)
+   - Game session orchestration
+   - Real-time event management
+   - Player coordination
+
+2. **Dungeon Service** (Port 3002)
+   - Room and environment management
+   - Map generation and storage
+   - Environmental interactions
+
+3. **Monster Service** (Port 3003)
+   - AI-powered monster behavior
+   - Combat calculations
+   - NPC roleplay with Gemini LLM
+
+4. **Player Service** (Port 3004)
+   - Character sheet management
+   - Inventory and equipment
+   - Player progression
+
+5. **Communication Service** (Port 3005)
+   - Discord bot integration
+   - Meshtastic mesh networking
+   - Cross-platform messaging
+
+6. **Rules Engine Service** (Port 3006)
+   - D&D 5e rule enforcement
+   - Dice rolling and calculations
+   - Spell and ability processing
+
+### Technology Stack
+
+- **Runtime**: Node.js 18 (Alpine Linux)
+- **Framework**: Express.js with Socket.io
+- **Database**: PostgreSQL 15 with Redis caching
+- **Authentication**: JWT with role-based access control
+- **Containerization**: Docker with multi-stage builds
+- **Load Balancer**: Nginx with rate limiting
+- **AI Integration**: Google Gemini LLM
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Docker Desktop (Windows/Mac) or Docker Engine (Linux)
+- Docker Compose v2+
+- Git
+
+### Environment Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd distributed_dungeon
+   ```
+
+2. **Configure environment variables**:
+   ```bash
+   # Copy the example environment file
+   cp .env.example .env
+   
+   # Edit .env with your actual values
+   # At minimum, set:
+   # - DATABASE_PASSWORD
+   # - REDIS_PASSWORD
+   # - JWT_SECRET
+   # - GEMINI_API_KEY (for AI features)
+   ```
+
+3. **Start development environment**:
+   
+   **Windows (PowerShell)**:
+   ```powershell
+   .\deploy.ps1 dev
+   ```
+   
+   **Linux/Mac (Bash)**:
+   ```bash
+   chmod +x deploy.sh
+   ./deploy.sh dev
+   ```
+   
+   **Manual Docker Compose**:
+   ```bash
+   docker compose up --build
+   ```
+
+### Accessing the Application
+
+- **API Gateway**: http://localhost:8080
+- **Individual Services**:
+  - Dungeon Master: http://localhost:3001
+  - Dungeon: http://localhost:3002
+  - Monster: http://localhost:3003
+  - Player: http://localhost:3004
+  - Communication: http://localhost:3005
+  - Rules Engine: http://localhost:3006
+
+## 📋 Deployment Commands
+
+### Development Environment
+
+Start with hot-reload for development:
+```bash
+# Background mode
+./deploy.sh dev -d
+
+# With rebuild
+./deploy.sh dev -b
+
+# Windows PowerShell
+.\deploy.ps1 dev -Detached -Build
+```
+
+### Production Environment
+
+Deploy optimized production build:
+```bash
+# Start production environment
+./deploy.sh prod -d
+
+# Windows PowerShell
+.\deploy.ps1 prod -Detached
+```
+
+### Management Commands
+
+```bash
+# View logs
+./deploy.sh logs
+
+# Check service status
+./deploy.sh status
+
+# Stop services
+./deploy.sh stop
+
+# Complete cleanup (removes volumes)
+./deploy.sh down
+
+# Build images without starting
+./deploy.sh build
+
+# Clean unused Docker resources
+./deploy.sh clean
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Key environment variables in `.env`:
+
+```env
+# Database Configuration
+DATABASE_PASSWORD=your_secure_password
+POSTGRES_DB=dungeon_db
+
+# Redis Configuration
+REDIS_PASSWORD=your_redis_password
+
+# Security
+JWT_SECRET=your_jwt_secret_key
+
+# AI Integration
+GEMINI_API_KEY=your_gemini_api_key
+
+# Discord Integration (optional)
+DISCORD_BOT_TOKEN=your_discord_bot_token
+DISCORD_CLIENT_ID=your_discord_client_id
+DISCORD_GUILD_ID=your_discord_guild_id
+
+# Production Scaling
+DUNGEON_MASTER_REPLICAS=1
+DUNGEON_SERVICE_REPLICAS=2
+MONSTER_SERVICE_REPLICAS=3
+PLAYER_SERVICE_REPLICAS=2
+COMMUNICATION_SERVICE_REPLICAS=1
+RULES_ENGINE_REPLICAS=2
+```
 
 ## Architecture
 
