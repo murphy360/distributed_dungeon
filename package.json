@@ -1,0 +1,81 @@
+{
+  "name": "distributed-dungeon",
+  "version": "1.0.0",
+  "description": "Distributed RPG platform with microservices architecture",
+  "main": "index.js",
+  "scripts": {
+    "dev": "docker-compose up -d",
+    "dev:logs": "docker-compose logs -f",
+    "dev:down": "docker-compose down",
+    "dev:build": "docker-compose build",
+    "dev:setup": "bash scripts/setup-dev.sh",
+    "dev:setup:windows": "scripts\\setup-dev.bat",
+    "prod": "docker-compose -f docker-compose.prod.yml up -d",
+    "prod:build": "docker-compose -f docker-compose.prod.yml build",
+    "prod:down": "docker-compose -f docker-compose.prod.yml down",
+    "install:all": "npm run install:dungeon-master && npm run install:dungeon && npm run install:monster && npm run install:player && npm run install:communication && npm run install:rules-engine",
+    "install:dungeon-master": "cd services/dungeon-master && npm install",
+    "install:dungeon": "cd services/dungeon && npm install",
+    "install:monster": "cd services/monster && npm install",
+    "install:player": "cd services/player && npm install",
+    "install:communication": "cd services/communication && npm install",
+    "install:rules-engine": "cd services/rules-engine && npm install",
+    "test": "npm run test:dungeon-master && npm run test:dungeon && npm run test:monster && npm run test:player && npm run test:communication && npm run test:rules-engine",
+    "test:dungeon-master": "cd services/dungeon-master && npm test",
+    "test:dungeon": "cd services/dungeon && npm test",
+    "test:monster": "cd services/monster && npm test",
+    "test:player": "cd services/player && npm test",
+    "test:communication": "cd services/communication && npm test",
+    "test:rules-engine": "cd services/rules-engine && npm test",
+    "lint": "npm run lint:dungeon-master && npm run lint:dungeon && npm run lint:monster && npm run lint:player && npm run lint:communication && npm run lint:rules-engine",
+    "lint:dungeon-master": "cd services/dungeon-master && npm run lint",
+    "lint:dungeon": "cd services/dungeon && npm run lint",
+    "lint:monster": "cd services/monster && npm run lint",
+    "lint:player": "cd services/player && npm run lint",
+    "lint:communication": "cd services/communication && npm run lint",
+    "lint:rules-engine": "cd services/rules-engine && npm run lint",
+    "db:migrate": "docker-compose exec database psql -U postgres -d dungeon_db -f /docker-entrypoint-initdb.d/001_initial_schema.sql",
+    "db:seed": "docker-compose exec database psql -U postgres -d dungeon_db -f /docker-entrypoint-initdb.d/seeds/001_core_data.sql",
+    "db:reset": "npm run db:migrate && npm run db:seed",
+    "logs:all": "docker-compose logs -f",
+    "logs:dm": "docker-compose logs -f dungeon-master",
+    "logs:dungeon": "docker-compose logs -f dungeon",
+    "logs:monster": "docker-compose logs -f monster",
+    "logs:player": "docker-compose logs -f player",
+    "logs:communication": "docker-compose logs -f communication",
+    "logs:rules": "docker-compose logs -f rules-engine",
+    "logs:db": "docker-compose logs -f database",
+    "backup:db": "docker-compose exec database pg_dump -U postgres -d dungeon_db > backups/backup-$(date +%Y%m%d-%H%M%S).sql",
+    "health": "curl -f http://localhost:3001/health && curl -f http://localhost:3002/health && curl -f http://localhost:3003/health && curl -f http://localhost:3004/health && curl -f http://localhost:3005/health && curl -f http://localhost:3006/health"
+  },
+  "keywords": [
+    "rpg",
+    "microservices",
+    "docker",
+    "nodejs",
+    "postgresql",
+    "redis",
+    "websockets",
+    "ai",
+    "discord",
+    "meshtastic"
+  ],
+  "author": "Distributed Dungeon Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/murphy360/distributed_dungeon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/murphy360/distributed_dungeon/issues"
+  },
+  "homepage": "https://github.com/murphy360/distributed_dungeon#readme",
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "cross-env": "^7.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}
