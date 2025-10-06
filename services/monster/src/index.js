@@ -3,6 +3,9 @@ const { Pool } = require('pg');
 const redis = require('redis');
 const jwt = require('jsonwebtoken');
 const winston = require('winston');
+const path = require('path');
+const fs = require('fs');
+const helmet = require('helmet');
 
 // Configure logging
 const logger = winston.createLogger({
@@ -19,8 +22,34 @@ const logger = winston.createLogger({
 const app = express();
 const PORT = process.env.PORT || 3003;
 
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:", "data:"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", "https:", "data:"],
+      connectSrc: ["'self'", "ws:", "wss:"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+      baseUri: ["'self'"],
+      upgradeInsecureRequests: []
+    }
+  }
+}));
+
 // Middleware
 app.use(express.json());
+
+// Serve static files from web directory
+const webDir = path.join(__dirname, 'web');
+app.use(express.static(webDir));
 
 // Database connection
 const pool = new Pool({
@@ -45,6 +74,16 @@ redisClient.on('error', (err) => {
 
 // Connect to Redis
 redisClient.connect().catch(console.error);
+
+// Serve main web interface
+app.get('/', (req, res) => {
+    const indexPath = path.join(webDir, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send('Monster management interface not found');
+    }
+});
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
@@ -250,6 +289,162 @@ app.get('/api/monsters/random/:cr', async (req, res) => {
     }
 });
 
+// Dashboard API endpoints for web interface
+app.get('/api/dashboard/overview', async (req, res) => {
+    try {
+        // Get basic stats
+        const monsterCount = await pool.query('SELECT COUNT(*) as count FROM monsters');
+        const crDistribution = await pool.query(`
+            SELECT challenge_rating, COUNT(*) as count 
+            FROM monsters 
+            GROUP BY challenge_rating 
+            ORDER BY challenge_rating
+        `);
+        const typeDistribution = await pool.query(`
+            SELECT type, COUNT(*) as count 
+            FROM monsters 
+            GROUP BY type 
+            ORDER BY count DESC
+        `);
+        
+        // Get recent activity from Redis (if available)
+        let recentActivity = [];
+        try {
+            const activity = await redisClient.lRange('monster:recent_activity', 0, 9);
+            recentActivity = activity.map(item => JSON.parse(item));
+        } catch (redisError) {
+            logger.warn('Could not fetch recent activity from Redis:', redisError);
+        }
+        
+        const overview = {
+            status: 'active',
+            totalMonsters: parseInt(monsterCount.rows[0].count),
+            crDistribution: crDistribution.rows,
+            typeDistribution: typeDistribution.rows,
+            activeEncounters: 0, // TODO: Track active encounters
+            uptime: process.uptime(),
+            memory: process.memoryUsage(),
+            recentActivity: recentActivity,
+            timestamp: new Date().toISOString()
+        };
+        
+        res.json({ success: true, data: overview });
+    } catch (error) {
+        logger.error('Error fetching dashboard overview:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch overview data'
+        });
+    }
+});
+
+// Get monster statistics for charts
+app.get('/api/dashboard/stats', async (req, res) => {
+    try {
+        const stats = {
+            crDistribution: await pool.query(`
+                SELECT challenge_rating, COUNT(*) as count 
+                FROM monsters 
+                GROUP BY challenge_rating 
+                ORDER BY challenge_rating
+            `),
+            sizeDistribution: await pool.query(`
+                SELECT size, COUNT(*) as count 
+                FROM monsters 
+                GROUP BY size 
+                ORDER BY count DESC
+            `),
+            typeDistribution: await pool.query(`
+                SELECT type, COUNT(*) as count 
+                FROM monsters 
+                GROUP BY type 
+                ORDER BY count DESC
+            `),
+            alignmentDistribution: await pool.query(`
+                SELECT alignment, COUNT(*) as count 
+                FROM monsters 
+                GROUP BY alignment 
+                ORDER BY count DESC
+            `)
+        };
+        
+        res.json({ 
+            success: true, 
+            data: {
+                crDistribution: stats.crDistribution.rows,
+                sizeDistribution: stats.sizeDistribution.rows,
+                typeDistribution: stats.typeDistribution.rows,
+                alignmentDistribution: stats.alignmentDistribution.rows
+            }
+        });
+    } catch (error) {
+        logger.error('Error fetching monster statistics:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch monster statistics'
+        });
+    }
+});
+
+// Get encounter suggestions
+app.get('/api/encounters/suggestions', async (req, res) => {
+    try {
+        const { partyLevel = 5, partySize = 4, difficulty = 'medium', environment } = req.query;
+        
+        // Calculate XP budget
+        const thresholdsPerLevel = {
+            1: { easy: 25, medium: 50, hard: 75, deadly: 100 },
+            2: { easy: 50, medium: 100, hard: 150, deadly: 200 },
+            3: { easy: 75, medium: 150, hard: 225, deadly: 400 },
+            4: { easy: 125, medium: 250, hard: 375, deadly: 500 },
+            5: { easy: 250, medium: 500, hard: 750, deadly: 1100 },
+            6: { easy: 300, medium: 600, hard: 900, deadly: 1400 },
+            7: { easy: 350, medium: 750, hard: 1100, deadly: 1700 },
+            8: { easy: 450, medium: 900, hard: 1400, deadly: 2100 },
+            9: { easy: 550, medium: 1100, hard: 1600, deadly: 2400 },
+            10: { easy: 600, medium: 1200, hard: 1900, deadly: 2800 }
+        };
+        
+        const levelThresholds = thresholdsPerLevel[parseInt(partyLevel)] || thresholdsPerLevel[5];
+        const xpBudget = levelThresholds[difficulty] * parseInt(partySize);
+        
+        // Get appropriate monsters (CR should be roughly party level ± 3)
+        const minCR = Math.max(0, parseInt(partyLevel) - 3);
+        const maxCR = parseInt(partyLevel) + 3;
+        
+        let query = `
+            SELECT * FROM monsters 
+            WHERE challenge_rating >= $1 AND challenge_rating <= $2
+        `;
+        const params = [minCR, maxCR];
+        
+        if (environment) {
+            query += ` AND ($${params.length + 1} = ANY(environments) OR environments IS NULL)`;
+            params.push(environment);
+        }
+        
+        query += ' ORDER BY RANDOM() LIMIT 20';
+        
+        const result = await pool.query(query, params);
+        
+        res.json({
+            success: true,
+            data: {
+                xpBudget,
+                difficulty,
+                monsters: result.rows,
+                suggestions: generateEncounterSuggestions(result.rows, xpBudget)
+            }
+        });
+    } catch (error) {
+        logger.error('Error fetching encounter suggestions:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch encounter suggestions'
+        });
+    }
+});
+
 // Calculate encounter difficulty
 app.post('/api/encounters/calculate', async (req, res) => {
     try {
@@ -338,10 +533,78 @@ app.post('/api/encounters/calculate', async (req, res) => {
     }
 });
 
+// Helper function to generate encounter suggestions
+function generateEncounterSuggestions(monsters, xpBudget) {
+    const suggestions = [];
+    const crToXP = {
+        0: 10, 0.125: 25, 0.25: 50, 0.5: 100,
+        1: 200, 2: 450, 3: 700, 4: 1100, 5: 1800,
+        6: 2300, 7: 2900, 8: 3900, 9: 5000, 10: 5900,
+        11: 7200, 12: 8400, 13: 10000, 14: 11500, 15: 13000,
+        16: 15000, 17: 18000, 18: 20000, 19: 22000, 20: 25000
+    };
+    
+    // Single monster encounters
+    monsters.forEach(monster => {
+        const monsterXP = crToXP[monster.challenge_rating] || 0;
+        if (monsterXP <= xpBudget * 1.2 && monsterXP >= xpBudget * 0.5) {
+            suggestions.push({
+                type: 'single',
+                monsters: [monster],
+                totalXP: monsterXP,
+                adjustedXP: monsterXP,
+                description: `Single ${monster.name}`
+            });
+        }
+    });
+    
+    // Multiple monster encounters (basic implementation)
+    for (let i = 0; i < monsters.length && suggestions.length < 10; i++) {
+        for (let j = i + 1; j < monsters.length && suggestions.length < 10; j++) {
+            const monster1XP = crToXP[monsters[i].challenge_rating] || 0;
+            const monster2XP = crToXP[monsters[j].challenge_rating] || 0;
+            const totalXP = monster1XP + monster2XP;
+            const adjustedXP = totalXP * 1.5; // 2 monsters multiplier
+            
+            if (adjustedXP <= xpBudget * 1.2 && adjustedXP >= xpBudget * 0.7) {
+                suggestions.push({
+                    type: 'pair',
+                    monsters: [monsters[i], monsters[j]],
+                    totalXP,
+                    adjustedXP,
+                    description: `${monsters[i].name} and ${monsters[j].name}`
+                });
+            }
+        }
+    }
+    
+    return suggestions.slice(0, 5); // Return top 5 suggestions
+}
+
 // Start server
 app.listen(PORT, () => {
     logger.info(`Monster Service running on port ${PORT}`);
     logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // Add some sample activity data after startup
+    setTimeout(async () => {
+        try {
+            const sampleActivity = [
+                { type: 'encounter', message: 'Goblin encounter generated for level 3 party', timestamp: new Date(Date.now() - 300000).toISOString() },
+                { type: 'creation', message: 'New custom monster "Shadow Drake" created', timestamp: new Date(Date.now() - 240000).toISOString() },
+                { type: 'encounter', message: 'Deadly encounter calculated: Ancient Red Dragon', timestamp: new Date(Date.now() - 180000).toISOString() },
+                { type: 'search', message: 'Monster search: CR 5-8 undead creatures', timestamp: new Date(Date.now() - 120000).toISOString() },
+                { type: 'encounter', message: 'Medium encounter: 2 Owlbears vs party of 4', timestamp: new Date(Date.now() - 60000).toISOString() }
+            ];
+            
+            for (const activity of sampleActivity) {
+                await redisClient.lPush('monster:recent_activity', JSON.stringify(activity));
+            }
+            await redisClient.lTrim('monster:recent_activity', 0, 19); // Keep only 20 items
+        } catch (error) {
+            logger.warn('Could not initialize sample activity data:', error);
+        }
+    }, 2000);
 });
 
 // Graceful shutdown

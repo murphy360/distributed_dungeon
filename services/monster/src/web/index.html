@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monster Compendium - Management & Encounter Builder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Cinzel', serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(139, 0, 0, 0.3);
+            backdrop-filter: blur(15px);
+            border-bottom: 3px solid #8b0000;
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 6px 25px rgba(139, 0, 0, 0.4);
+        }
+
+        .header h1 {
+            color: #ff6b6b;
+            font-size: 2.4rem;
+            text-shadow: 0 0 25px rgba(255, 107, 107, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            font-weight: 700;
+        }
+
+        .header .subtitle {
+            color: #ff9999;
+            font-size: 1.1rem;
+            margin-top: 0.5rem;
+            font-style: italic;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 300px 1fr 350px;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1800px;
+            margin: 0 auto;
+            min-height: calc(100vh - 140px);
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .card {
+            background: rgba(139, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+            border: 2px solid #8b0000;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(139, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(139, 0, 0, 0.3);
+            border-color: #ff6b6b;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 107, 107, 0.3);
+            padding-bottom: 0.5rem;
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #ff6b6b;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .filters {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-group label {
+            color: #ff9999;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .filter-input, .filter-select {
+            padding: 0.75rem;
+            border: 2px solid #8b0000;
+            background: rgba(0, 0, 0, 0.3);
+            color: #e0e0e0;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .filter-input:focus, .filter-select:focus {
+            outline: none;
+            border-color: #ff6b6b;
+            box-shadow: 0 0 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .filter-select option {
+            background: #1a1a2e;
+            color: #e0e0e0;
+        }
+
+        .cr-range {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .cr-range span {
+            text-align: center;
+            color: #ff9999;
+            font-weight: bold;
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .content-tabs {
+            display: flex;
+            background: rgba(139, 0, 0, 0.1);
+            border-radius: 12px;
+            padding: 0.5rem;
+            gap: 0.5rem;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            background: transparent;
+            color: #ff9999;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            font-size: 1rem;
+        }
+
+        .tab-button.active {
+            background: linear-gradient(135deg, #8b0000, #ff6b6b);
+            color: white;
+            box-shadow: 0 4px 15px rgba(139, 0, 0, 0.4);
+        }
+
+        .tab-button:hover:not(.active) {
+            background: rgba(139, 0, 0, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .monster-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            max-height: 70vh;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        .monster-card {
+            background: rgba(0, 0, 0, 0.4);
+            border: 2px solid #666;
+            border-radius: 12px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .monster-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--monster-color, #666);
+        }
+
+        .monster-card:hover {
+            transform: translateY(-5px);
+            border-color: #ff6b6b;
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.2);
+        }
+
+        .monster-card.selected {
+            border-color: #ff6b6b;
+            box-shadow: 0 0 20px rgba(255, 107, 107, 0.4);
+            background: rgba(139, 0, 0, 0.1);
+        }
+
+        .monster-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .monster-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #ff6b6b;
+            margin-bottom: 0.25rem;
+        }
+
+        .monster-meta {
+            font-size: 0.85rem;
+            color: #bbb;
+            line-height: 1.3;
+        }
+
+        .monster-cr {
+            background: linear-gradient(135deg, #8b0000, #ff6b6b);
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-align: center;
+            min-width: 50px;
+        }
+
+        .monster-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .stat-block {
+            text-align: center;
+            padding: 0.6rem;
+            background: rgba(139, 0, 0, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(139, 0, 0, 0.3);
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #ff6b6b;
+            margin-bottom: 0.2rem;
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: #ff9999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .encounter-builder {
+            background: rgba(139, 0, 0, 0.1);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .encounter-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: 2px solid #8b0000;
+            background: rgba(139, 0, 0, 0.2);
+            color: #ff6b6b;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            font-weight: 500;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: rgba(139, 0, 0, 0.4);
+            border-color: #ff6b6b;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #8b0000, #ff6b6b);
+            color: white;
+            border-color: #ff6b6b;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc143c, #ff4757);
+            border-color: #dc143c;
+        }
+
+        .encounter-result {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            border-left: 4px solid #ff6b6b;
+        }
+
+        .difficulty-indicator {
+            display: inline-block;
+            padding: 0.4rem 1rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .difficulty-trivial { background: #28a745; color: white; }
+        .difficulty-easy { background: #17a2b8; color: white; }
+        .difficulty-medium { background: #ffc107; color: black; }
+        .difficulty-hard { background: #fd7e14; color: white; }
+        .difficulty-deadly { background: #dc3545; color: white; }
+
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .dashboard-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .dashboard-stat {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(139, 0, 0, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(139, 0, 0, 0.3);
+        }
+
+        .dashboard-stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #ff6b6b;
+            margin-bottom: 0.3rem;
+        }
+
+        .dashboard-stat-label {
+            font-size: 0.8rem;
+            color: #ff9999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .activity-list {
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .activity-item {
+            padding: 0.6rem;
+            margin: 0.3rem 0;
+            border-radius: 6px;
+            border-left: 3px solid transparent;
+            background: rgba(139, 0, 0, 0.1);
+            transition: all 0.2s ease;
+        }
+
+        .activity-item:hover {
+            background: rgba(139, 0, 0, 0.2);
+        }
+
+        .activity-item.encounter { border-left-color: #ff6b6b; }
+        .activity-item.creation { border-left-color: #17a2b8; }
+        .activity-item.search { border-left-color: #ffc107; }
+
+        .monster-detail-panel {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            padding: 2rem;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .detail-header {
+            border-bottom: 2px solid #8b0000;
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .detail-name {
+            font-size: 2rem;
+            color: #ff6b6b;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .detail-meta {
+            color: #ff9999;
+            font-size: 1.1rem;
+            font-style: italic;
+        }
+
+        .ability-scores {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .ability-score {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(139, 0, 0, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(139, 0, 0, 0.3);
+        }
+
+        .ability-name {
+            font-size: 0.8rem;
+            color: #ff9999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.3rem;
+        }
+
+        .ability-value {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #ff6b6b;
+            margin-bottom: 0.2rem;
+        }
+
+        .ability-modifier {
+            font-size: 0.9rem;
+            color: #bbb;
+        }
+
+        .actions-section {
+            margin-top: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            color: #ff6b6b;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 107, 107, 0.3);
+            padding-bottom: 0.5rem;
+        }
+
+        .action-item {
+            background: rgba(139, 0, 0, 0.05);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border-left: 3px solid #8b0000;
+        }
+
+        .action-name {
+            font-weight: bold;
+            color: #ff6b6b;
+            margin-bottom: 0.5rem;
+        }
+
+        .action-description {
+            color: #ddd;
+            line-height: 1.4;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.95);
+            color: #ff6b6b;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 2px solid #8b0000;
+            font-size: 0.9rem;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 300px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6);
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            color: #ff9999;
+            font-style: italic;
+            font-size: 1.1rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #ff9999;
+            font-style: italic;
+        }
+
+        .empty-state h3 {
+            color: #ff6b6b;
+            margin-bottom: 1rem;
+        }
+
+        /* Monster type colors */
+        .type-aberration { --monster-color: #8b008b; }
+        .type-beast { --monster-color: #228b22; }
+        .type-celestial { --monster-color: #ffd700; }
+        .type-construct { --monster-color: #a0522d; }
+        .type-dragon { --monster-color: #dc143c; }
+        .type-elemental { --monster-color: #4169e1; }
+        .type-fey { --monster-color: #9370db; }
+        .type-fiend { --monster-color: #8b0000; }
+        .type-giant { --monster-color: #cd853f; }
+        .type-humanoid { --monster-color: #daa520; }
+        .type-monstrosity { --monster-color: #2f4f4f; }
+        .type-ooze { --monster-color: #6b8e23; }
+        .type-plant { --monster-color: #32cd32; }
+        .type-undead { --monster-color: #483d8b; }
+
+        /* Responsive design */
+        @media (max-width: 1400px) {
+            .main-container {
+                grid-template-columns: 280px 1fr 320px;
+                gap: 1rem;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .main-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+            }
+            
+            .sidebar, .right-panel {
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                display: grid;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .main-container {
+                padding: 1rem;
+                gap: 1rem;
+            }
+            
+            .monster-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(139, 0, 0, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #8b0000, #ff6b6b);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #ff6b6b, #8b0000);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>👹 Monster Compendium</h1>
+        <div class="subtitle">Creature Management & Encounter Builder</div>
+    </div>
+
+    <div class="main-container">
+        <!-- Left Sidebar: Filters & Search -->
+        <div class="sidebar">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        🔍 Search & Filter
+                    </div>
+                </div>
+                <div class="filters">
+                    <div class="filter-group">
+                        <label for="searchName">Monster Name</label>
+                        <input type="text" id="searchName" class="filter-input" placeholder="Search by name...">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="filterType">Creature Type</label>
+                        <select id="filterType" class="filter-select">
+                            <option value="">All Types</option>
+                            <option value="aberration">Aberration</option>
+                            <option value="beast">Beast</option>
+                            <option value="celestial">Celestial</option>
+                            <option value="construct">Construct</option>
+                            <option value="dragon">Dragon</option>
+                            <option value="elemental">Elemental</option>
+                            <option value="fey">Fey</option>
+                            <option value="fiend">Fiend</option>
+                            <option value="giant">Giant</option>
+                            <option value="humanoid">Humanoid</option>
+                            <option value="monstrosity">Monstrosity</option>
+                            <option value="ooze">Ooze</option>
+                            <option value="plant">Plant</option>
+                            <option value="undead">Undead</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label for="filterSize">Size</label>
+                        <select id="filterSize" class="filter-select">
+                            <option value="">All Sizes</option>
+                            <option value="tiny">Tiny</option>
+                            <option value="small">Small</option>
+                            <option value="medium">Medium</option>
+                            <option value="large">Large</option>
+                            <option value="huge">Huge</option>
+                            <option value="gargantuan">Gargantuan</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Challenge Rating</label>
+                        <div class="cr-range">
+                            <input type="number" id="crMin" class="filter-input" placeholder="Min" min="0" max="30" step="0.125">
+                            <span>to</span>
+                            <input type="number" id="crMax" class="filter-input" placeholder="Max" min="0" max="30" step="0.125">
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="applyFilters()">Apply Filters</button>
+                    <button class="btn" onclick="clearFilters()">Clear All</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        ⚔️ Quick Actions
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <button class="btn" onclick="randomMonster()">🎲 Random Monster</button>
+                    <button class="btn" onclick="showCreateForm()">➕ Create Monster</button>
+                    <button class="btn" onclick="exportEncounter()">📤 Export Encounter</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <div class="content-tabs">
+                <button class="tab-button active" onclick="switchTab('browser')">Monster Browser</button>
+                <button class="tab-button" onclick="switchTab('encounter')">Encounter Builder</button>
+                <button class="tab-button" onclick="switchTab('details')">Monster Details</button>
+            </div>
+
+            <!-- Monster Browser Tab -->
+            <div id="browser-tab" class="tab-content active">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            📚 Monster Library
+                        </div>
+                        <div style="color: #ff9999; font-size: 0.9rem;">
+                            <span id="monsterCount">Loading...</span> creatures
+                        </div>
+                    </div>
+                    <div class="monster-grid" id="monsterGrid">
+                        <div class="loading">Loading monsters...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Encounter Builder Tab -->
+            <div id="encounter-tab" class="tab-content">
+                <div class="encounter-builder">
+                    <h2 style="color: #ff6b6b; margin-bottom: 1.5rem;">⚔️ Encounter Builder</h2>
+                    
+                    <div class="encounter-controls">
+                        <div class="filter-group">
+                            <label for="partyLevel">Party Level</label>
+                            <input type="number" id="partyLevel" class="filter-input" value="5" min="1" max="20">
+                        </div>
+                        <div class="filter-group">
+                            <label for="partySize">Party Size</label>
+                            <input type="number" id="partySize" class="filter-input" value="4" min="1" max="8">
+                        </div>
+                        <div class="filter-group">
+                            <label for="encounterDifficulty">Difficulty</label>
+                            <select id="encounterDifficulty" class="filter-select">
+                                <option value="easy">Easy</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="hard">Hard</option>
+                                <option value="deadly">Deadly</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="environment">Environment</label>
+                            <select id="environment" class="filter-select">
+                                <option value="">Any Environment</option>
+                                <option value="dungeon">Dungeon</option>
+                                <option value="forest">Forest</option>
+                                <option value="swamp">Swamp</option>
+                                <option value="mountain">Mountain</option>
+                                <option value="desert">Desert</option>
+                                <option value="arctic">Arctic</option>
+                                <option value="coastal">Coastal</option>
+                                <option value="urban">Urban</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                        <button class="btn btn-primary" onclick="generateEncounter()">🎲 Generate Encounter</button>
+                        <button class="btn" onclick="calculateSelectedEncounter()">🧮 Calculate Current</button>
+                        <button class="btn btn-danger" onclick="clearEncounter()">🗑️ Clear Encounter</button>
+                    </div>
+                    
+                    <div id="encounterResult" class="encounter-result" style="display: none;">
+                        <!-- Encounter results will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Monster Details Tab -->
+            <div id="details-tab" class="tab-content">
+                <div class="monster-detail-panel" id="monsterDetailPanel">
+                    <div class="empty-state">
+                        <h3>No Monster Selected</h3>
+                        <p>Click on a monster from the browser to view detailed information including stats, abilities, and actions.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Dashboard & Activity -->
+        <div class="right-panel">
+            <!-- Dashboard Stats -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        📊 Dashboard
+                    </div>
+                </div>
+                <div class="dashboard-stats">
+                    <div class="dashboard-stat">
+                        <div class="dashboard-stat-value" id="totalMonsters">--</div>
+                        <div class="dashboard-stat-label">Total Monsters</div>
+                    </div>
+                    <div class="dashboard-stat">
+                        <div class="dashboard-stat-value" id="activeEncounters">--</div>
+                        <div class="dashboard-stat-label">Active Encounters</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Type Distribution -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        🏷️ Type Distribution
+                    </div>
+                </div>
+                <div id="typeDistribution" style="max-height: 200px; overflow-y: auto;">
+                    <div class="loading">Loading statistics...</div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        ⚡ Recent Activity
+                    </div>
+                </div>
+                <div class="activity-list" id="activityList">
+                    <div class="loading">Loading activity...</div>
+                </div>
+            </div>
+
+            <!-- Selected Monsters for Encounter -->
+            <div class="card" id="selectedMonstersCard" style="display: none;">
+                <div class="card-header">
+                    <div class="card-title">
+                        🎯 Selected Monsters
+                    </div>
+                </div>
+                <div id="selectedMonstersList">
+                    <!-- Selected monsters will be listed here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tooltip element -->
+    <div id="tooltip" class="tooltip" style="display: none;"></div>
+
+    <script>
+        // Global variables
+        let allMonsters = [];
+        let filteredMonsters = [];
+        let selectedMonsters = [];
+        let currentMonster = null;
+        let dashboardData = null;
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMonsters();
+            loadDashboardData();
+            
+            // Set up event listeners
+            document.getElementById('searchName').addEventListener('input', debounce(applyFilters, 300));
+            document.getElementById('filterType').addEventListener('change', applyFilters);
+            document.getElementById('filterSize').addEventListener('change', applyFilters);
+            document.getElementById('crMin').addEventListener('input', debounce(applyFilters, 300));
+            document.getElementById('crMax').addEventListener('input', debounce(applyFilters, 300));
+            
+            // Auto-refresh dashboard every 30 seconds
+            setInterval(loadDashboardData, 30000);
+        });
+
+        // Load all monsters from API
+        async function loadMonsters() {
+            try {
+                const response = await fetch('/api/monsters');
+                const data = await response.json();
+                
+                if (data.success) {
+                    allMonsters = data.data;
+                    filteredMonsters = [...allMonsters];
+                    renderMonsters();
+                    updateMonsterCount();
+                }
+            } catch (error) {
+                console.error('Failed to load monsters:', error);
+                document.getElementById('monsterGrid').innerHTML = 
+                    '<div class="empty-state"><h3>Failed to Load Monsters</h3><p>Please try refreshing the page.</p></div>';
+            }
+        }
+
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                const response = await fetch('/api/dashboard/overview');
+                const data = await response.json();
+                
+                if (data.success) {
+                    dashboardData = data.data;
+                    updateDashboard();
+                }
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+            }
+        }
+
+        // Update dashboard display
+        function updateDashboard() {
+            if (!dashboardData) return;
+            
+            document.getElementById('totalMonsters').textContent = dashboardData.totalMonsters;
+            document.getElementById('activeEncounters').textContent = dashboardData.activeEncounters;
+            
+            // Update type distribution
+            const typeDistElement = document.getElementById('typeDistribution');
+            if (dashboardData.typeDistribution && dashboardData.typeDistribution.length > 0) {
+                typeDistElement.innerHTML = dashboardData.typeDistribution.map(type => `
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem; margin: 0.25rem 0; background: rgba(139, 0, 0, 0.1); border-radius: 6px;">
+                        <span style="color: #ff9999; text-transform: capitalize;">${type.type}</span>
+                        <span style="color: #ff6b6b; font-weight: bold;">${type.count}</span>
+                    </div>
+                `).join('');
+            }
+            
+            // Update activity list
+            const activityElement = document.getElementById('activityList');
+            if (dashboardData.recentActivity && dashboardData.recentActivity.length > 0) {
+                activityElement.innerHTML = dashboardData.recentActivity.map(activity => `
+                    <div class="activity-item ${activity.type}">
+                        ${new Date(activity.timestamp).toLocaleTimeString()} - ${activity.message}
+                    </div>
+                `).join('');
+            } else {
+                activityElement.innerHTML = '<p style="text-align: center; color: #ff9999; font-style: italic;">No recent activity</p>';
+            }
+        }
+
+        // Render monsters in the grid
+        function renderMonsters() {
+            const grid = document.getElementById('monsterGrid');
+            
+            if (filteredMonsters.length === 0) {
+                grid.innerHTML = '<div class="empty-state"><h3>No Monsters Found</h3><p>Try adjusting your filters or search criteria.</p></div>';
+                return;
+            }
+            
+            grid.innerHTML = filteredMonsters.map(monster => {
+                const isSelected = selectedMonsters.some(m => m.id === monster.id);
+                const typeClass = `type-${monster.type.toLowerCase()}`;
+                
+                return `
+                    <div class="monster-card ${typeClass} ${isSelected ? 'selected' : ''}" onclick="selectMonster('${monster.id}')">
+                        <div class="monster-header">
+                            <div>
+                                <div class="monster-name">${monster.name}</div>
+                                <div class="monster-meta">
+                                    ${monster.size} ${monster.type}<br>
+                                    ${monster.alignment}
+                                </div>
+                            </div>
+                            <div class="monster-cr">CR ${monster.challenge_rating}</div>
+                        </div>
+                        <div class="monster-stats">
+                            <div class="stat-block">
+                                <div class="stat-value">${monster.armor_class}</div>
+                                <div class="stat-label">AC</div>
+                            </div>
+                            <div class="stat-block">
+                                <div class="stat-value">${monster.hit_points}</div>
+                                <div class="stat-label">HP</div>
+                            </div>
+                            <div class="stat-block">
+                                <div class="stat-value">${typeof monster.speed === 'object' ? Object.values(monster.speed)[0] : monster.speed}</div>
+                                <div class="stat-label">Speed</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Apply filters to monster list
+        function applyFilters() {
+            const searchName = document.getElementById('searchName').value.toLowerCase();
+            const filterType = document.getElementById('filterType').value.toLowerCase();
+            const filterSize = document.getElementById('filterSize').value.toLowerCase();
+            const crMin = parseFloat(document.getElementById('crMin').value) || 0;
+            const crMax = parseFloat(document.getElementById('crMax').value) || 30;
+            
+            filteredMonsters = allMonsters.filter(monster => {
+                const matchesName = !searchName || monster.name.toLowerCase().includes(searchName);
+                const matchesType = !filterType || monster.type.toLowerCase().includes(filterType);
+                const matchesSize = !filterSize || monster.size.toLowerCase().includes(filterSize);
+                const matchesCR = monster.challenge_rating >= crMin && monster.challenge_rating <= crMax;
+                
+                return matchesName && matchesType && matchesSize && matchesCR;
+            });
+            
+            renderMonsters();
+            updateMonsterCount();
+        }
+
+        // Clear all filters
+        function clearFilters() {
+            document.getElementById('searchName').value = '';
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterSize').value = '';
+            document.getElementById('crMin').value = '';
+            document.getElementById('crMax').value = '';
+            
+            filteredMonsters = [...allMonsters];
+            renderMonsters();
+            updateMonsterCount();
+        }
+
+        // Update monster count display
+        function updateMonsterCount() {
+            document.getElementById('monsterCount').textContent = filteredMonsters.length;
+        }
+
+        // Select/deselect monster for encounter
+        function selectMonster(monsterId) {
+            const monster = allMonsters.find(m => m.id === monsterId);
+            if (!monster) return;
+            
+            const existingIndex = selectedMonsters.findIndex(m => m.id === monsterId);
+            
+            if (existingIndex >= 0) {
+                // Deselect monster
+                selectedMonsters.splice(existingIndex, 1);
+            } else {
+                // Select monster
+                selectedMonsters.push(monster);
+            }
+            
+            renderMonsters();
+            updateSelectedMonstersList();
+            
+            // Show monster details
+            showMonsterDetails(monster);
+        }
+
+        // Show detailed monster information
+        function showMonsterDetails(monster) {
+            currentMonster = monster;
+            
+            const detailPanel = document.getElementById('monsterDetailPanel');
+            detailPanel.innerHTML = `
+                <div class="detail-header">
+                    <div class="detail-name">${monster.name}</div>
+                    <div class="detail-meta">${monster.size} ${monster.type}, ${monster.alignment}</div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin: 1.5rem 0;">
+                    <div class="stat-block">
+                        <div class="stat-value">${monster.armor_class}</div>
+                        <div class="stat-label">Armor Class</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-value">${monster.hit_points}</div>
+                        <div class="stat-label">Hit Points</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-value">${typeof monster.speed === 'object' ? Object.entries(monster.speed).map(([k,v]) => `${k} ${v}`).join(', ') : monster.speed}</div>
+                        <div class="stat-label">Speed</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-value">${monster.challenge_rating}</div>
+                        <div class="stat-label">Challenge Rating</div>
+                    </div>
+                </div>
+                
+                <div class="ability-scores">
+                    <div class="ability-score">
+                        <div class="ability-name">STR</div>
+                        <div class="ability-value">${monster.strength}</div>
+                        <div class="ability-modifier">${getModifier(monster.strength)}</div>
+                    </div>
+                    <div class="ability-score">
+                        <div class="ability-name">DEX</div>
+                        <div class="ability-value">${monster.dexterity}</div>
+                        <div class="ability-modifier">${getModifier(monster.dexterity)}</div>
+                    </div>
+                    <div class="ability-score">
+                        <div class="ability-name">CON</div>
+                        <div class="ability-value">${monster.constitution}</div>
+                        <div class="ability-modifier">${getModifier(monster.constitution)}</div>
+                    </div>
+                    <div class="ability-score">
+                        <div class="ability-name">INT</div>
+                        <div class="ability-value">${monster.intelligence}</div>
+                        <div class="ability-modifier">${getModifier(monster.intelligence)}</div>
+                    </div>
+                    <div class="ability-score">
+                        <div class="ability-name">WIS</div>
+                        <div class="ability-value">${monster.wisdom}</div>
+                        <div class="ability-modifier">${getModifier(monster.wisdom)}</div>
+                    </div>
+                    <div class="ability-score">
+                        <div class="ability-name">CHA</div>
+                        <div class="ability-value">${monster.charisma}</div>
+                        <div class="ability-modifier">${getModifier(monster.charisma)}</div>
+                    </div>
+                </div>
+                
+                ${monster.skills && Object.keys(monster.skills).length > 0 ? `
+                    <div class="section-title">Skills</div>
+                    <div style="margin-bottom: 1rem; color: #ddd;">
+                        ${Object.entries(monster.skills).map(([skill, bonus]) => `${skill} +${bonus}`).join(', ')}
+                    </div>
+                ` : ''}
+                
+                ${monster.damage_resistances && monster.damage_resistances.length > 0 ? `
+                    <div class="section-title">Damage Resistances</div>
+                    <div style="margin-bottom: 1rem; color: #ddd;">${monster.damage_resistances.join(', ')}</div>
+                ` : ''}
+                
+                ${monster.damage_immunities && monster.damage_immunities.length > 0 ? `
+                    <div class="section-title">Damage Immunities</div>
+                    <div style="margin-bottom: 1rem; color: #ddd;">${monster.damage_immunities.join(', ')}</div>
+                ` : ''}
+                
+                ${monster.senses && monster.senses.length > 0 ? `
+                    <div class="section-title">Senses</div>
+                    <div style="margin-bottom: 1rem; color: #ddd;">${monster.senses.join(', ')}</div>
+                ` : ''}
+                
+                ${monster.languages && monster.languages.length > 0 ? `
+                    <div class="section-title">Languages</div>
+                    <div style="margin-bottom: 1rem; color: #ddd;">${monster.languages.join(', ')}</div>
+                ` : ''}
+                
+                ${monster.special_abilities && monster.special_abilities.length > 0 ? `
+                    <div class="actions-section">
+                        <div class="section-title">Special Abilities</div>
+                        ${monster.special_abilities.map(ability => `
+                            <div class="action-item">
+                                <div class="action-name">${ability.name}</div>
+                                <div class="action-description">${ability.description}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                
+                ${monster.actions && monster.actions.length > 0 ? `
+                    <div class="actions-section">
+                        <div class="section-title">Actions</div>
+                        ${monster.actions.map(action => `
+                            <div class="action-item">
+                                <div class="action-name">${action.name}</div>
+                                <div class="action-description">${action.description}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                
+                ${monster.legendary_actions && monster.legendary_actions.length > 0 ? `
+                    <div class="actions-section">
+                        <div class="section-title">Legendary Actions</div>
+                        ${monster.legendary_actions.map(action => `
+                            <div class="action-item">
+                                <div class="action-name">${action.name}</div>
+                                <div class="action-description">${action.description}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            `;
+            
+            // Switch to details tab
+            switchTab('details');
+        }
+
+        // Update selected monsters list
+        function updateSelectedMonstersList() {
+            const card = document.getElementById('selectedMonstersCard');
+            const list = document.getElementById('selectedMonstersList');
+            
+            if (selectedMonsters.length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+            
+            card.style.display = 'block';
+            list.innerHTML = selectedMonsters.map(monster => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; margin: 0.25rem 0; background: rgba(139, 0, 0, 0.1); border-radius: 6px;">
+                    <div>
+                        <div style="color: #ff6b6b; font-weight: bold;">${monster.name}</div>
+                        <div style="color: #ff9999; font-size: 0.8rem;">CR ${monster.challenge_rating}</div>
+                    </div>
+                    <button class="btn" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" onclick="removeFromEncounter('${monster.id}')">Remove</button>
+                </div>
+            `).join('');
+        }
+
+        // Remove monster from encounter
+        function removeFromEncounter(monsterId) {
+            const index = selectedMonsters.findIndex(m => m.id === monsterId);
+            if (index >= 0) {
+                selectedMonsters.splice(index, 1);
+                renderMonsters();
+                updateSelectedMonstersList();
+            }
+        }
+
+        // Switch between tabs
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
+        }
+
+        // Generate encounter suggestions
+        async function generateEncounter() {
+            const partyLevel = document.getElementById('partyLevel').value;
+            const partySize = document.getElementById('partySize').value;
+            const difficulty = document.getElementById('encounterDifficulty').value;
+            const environment = document.getElementById('environment').value;
+            
+            try {
+                const params = new URLSearchParams({
+                    partyLevel,
+                    partySize, 
+                    difficulty,
+                    ...(environment && { environment })
+                });
+                
+                const response = await fetch(`/api/encounters/suggestions?${params}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayEncounterSuggestions(data.data);
+                }
+            } catch (error) {
+                console.error('Failed to generate encounter:', error);
+            }
+        }
+
+        // Display encounter suggestions
+        function displayEncounterSuggestions(data) {
+            const resultDiv = document.getElementById('encounterResult');
+            
+            resultDiv.innerHTML = `
+                <h3 style="color: #ff6b6b; margin-bottom: 1rem;">🎲 Encounter Suggestions</h3>
+                <div style="margin-bottom: 1rem;">
+                    <strong>XP Budget:</strong> ${data.xpBudget} (${data.difficulty})
+                </div>
+                
+                ${data.suggestions.map((suggestion, index) => `
+                    <div style="background: rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 1rem; margin: 1rem 0; border-left: 3px solid #ff6b6b;">
+                        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 0.5rem;">
+                            <strong style="color: #ff6b6b;">${suggestion.description}</strong>
+                            <button class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.8rem; margin-left: auto;" onclick="useEncounterSuggestion(${index}, ${JSON.stringify(suggestion).replace(/"/g, '&quot;')})">Use This</button>
+                        </div>
+                        <div style="color: #ddd;">
+                            XP: ${suggestion.totalXP} (Adjusted: ${suggestion.adjustedXP})<br>
+                            Monsters: ${suggestion.monsters.map(m => m.name).join(', ')}
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // Use encounter suggestion
+        function useEncounterSuggestion(index, suggestion) {
+            selectedMonsters = [...suggestion.monsters];
+            renderMonsters();
+            updateSelectedMonstersList();
+            calculateSelectedEncounter();
+        }
+
+        // Calculate encounter difficulty for selected monsters
+        async function calculateSelectedEncounter() {
+            if (selectedMonsters.length === 0) {
+                alert('Please select some monsters first!');
+                return;
+            }
+            
+            const partyLevel = document.getElementById('partyLevel').value;
+            const partySize = document.getElementById('partySize').value;
+            const monsterIds = selectedMonsters.map(m => m.id);
+            
+            try {
+                const response = await fetch('/api/encounters/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ partyLevel, partySize, monsterIds })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayEncounterCalculation(data.data);
+                }
+            } catch (error) {
+                console.error('Failed to calculate encounter:', error);
+            }
+        }
+
+        // Display encounter calculation results
+        function displayEncounterCalculation(data) {
+            const resultDiv = document.getElementById('encounterResult');
+            
+            resultDiv.innerHTML = `
+                <h3 style="color: #ff6b6b; margin-bottom: 1rem;">🧮 Encounter Analysis</h3>
+                
+                <div class="difficulty-indicator difficulty-${data.difficulty}">
+                    ${data.difficulty.toUpperCase()} Encounter
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin: 1rem 0;">
+                    <div class="stat-block">
+                        <div class="stat-value">${data.totalXP}</div>
+                        <div class="stat-label">Base XP</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-value">${data.adjustedXP}</div>
+                        <div class="stat-label">Adjusted XP</div>
+                    </div>
+                    <div class="stat-block">
+                        <div class="stat-value">${data.monsters.length}</div>
+                        <div class="stat-label">Monsters</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 1rem;">
+                    <strong style="color: #ff6b6b;">Encounter Composition:</strong>
+                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem; color: #ddd;">
+                        ${data.monsters.map(monster => `
+                            <li>${monster.name} (CR ${monster.challenge_rating})</li>
+                        `).join('')}
+                    </ul>
+                </div>
+                
+                <div style="margin-top: 1rem;">
+                    <strong style="color: #ff6b6b;">Difficulty Thresholds:</strong>
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-top: 0.5rem;">
+                        <div style="text-align: center; padding: 0.5rem; background: rgba(40, 167, 69, 0.2); border-radius: 4px;">
+                            <div style="font-weight: bold;">Easy</div>
+                            <div>${data.thresholds.easy}</div>
+                        </div>
+                        <div style="text-align: center; padding: 0.5rem; background: rgba(23, 162, 184, 0.2); border-radius: 4px;">
+                            <div style="font-weight: bold;">Medium</div>
+                            <div>${data.thresholds.medium}</div>
+                        </div>
+                        <div style="text-align: center; padding: 0.5rem; background: rgba(253, 126, 20, 0.2); border-radius: 4px;">
+                            <div style="font-weight: bold;">Hard</div>
+                            <div>${data.thresholds.hard}</div>
+                        </div>
+                        <div style="text-align: center; padding: 0.5rem; background: rgba(220, 53, 69, 0.2); border-radius: 4px;">
+                            <div style="font-weight: bold;">Deadly</div>
+                            <div>${data.thresholds.deadly}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // Clear encounter
+        function clearEncounter() {
+            selectedMonsters = [];
+            renderMonsters();
+            updateSelectedMonstersList();
+            document.getElementById('encounterResult').style.display = 'none';
+        }
+
+        // Get random monster
+        async function randomMonster() {
+            if (allMonsters.length === 0) return;
+            
+            const randomIndex = Math.floor(Math.random() * allMonsters.length);
+            const monster = allMonsters[randomIndex];
+            showMonsterDetails(monster);
+        }
+
+        // Export encounter (placeholder)
+        function exportEncounter() {
+            if (selectedMonsters.length === 0) {
+                alert('No monsters selected for export!');
+                return;
+            }
+            
+            const encounterData = {
+                monsters: selectedMonsters,
+                partyLevel: document.getElementById('partyLevel').value,
+                partySize: document.getElementById('partySize').value,
+                difficulty: document.getElementById('encounterDifficulty').value,
+                timestamp: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(encounterData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `encounter_${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+        }
+
+        // Show create monster form (placeholder)
+        function showCreateForm() {
+            alert('Monster creation form coming soon!');
+        }
+
+        // Utility functions
+        function getModifier(abilityScore) {
+            const modifier = Math.floor((abilityScore - 10) / 2);
+            return modifier >= 0 ? `+${modifier}` : `${modifier}`;
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Switch tab function for button clicks
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('tab-button')) {
+                const tabName = e.target.textContent.toLowerCase().split(' ')[0];
+                switchTab(tabName === 'monster' ? 'browser' : tabName === 'encounter' ? 'encounter' : 'details');
+            }
+        });
+    </script>
+</body>
+</html>
