@@ -5,6 +5,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const logger = winston.createLogger({
@@ -34,9 +36,32 @@ const io = socketIo(server, {
 });
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:", "data:"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", "https:", "data:"],
+      connectSrc: ["'self'", "ws:", "wss:"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+      baseUri: ["'self'"],
+      upgradeInsecureRequests: []
+    }
+  }
+}));
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// Serve static files from web directory
+const webDir = path.join(__dirname, 'web');
+app.use(express.static(webDir));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -56,10 +81,65 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Dashboard web interface route
+app.get('/', (req, res) => {
+  const indexPath = path.join(webDir, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('Dashboard interface not found');
+  }
+});
+
 // API Routes
 app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/dm', require('./routes/dungeon-master'));
 app.use('/api/events', require('./routes/events'));
+
+// Dashboard API endpoints
+app.get('/api/dashboard/overview', (req, res) => {
+  // Collect system overview data
+  const overview = {
+    status: 'running',
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    activeSessions: 2, // TODO: Get from database
+    totalCharacters: 1, // TODO: Get from database
+    connectionsCount: io.engine.clientsCount,
+    timestamp: new Date().toISOString()
+  };
+  
+  res.json({ success: true, data: overview });
+});
+
+app.get('/api/dashboard/characters', (req, res) => {
+  // TODO: Get registered characters from database
+  const characters = [
+    {
+      id: 'fighter-001',
+      name: 'grax-fighter',
+      class: 'fighter',
+      level: 3,
+      status: 'online',
+      endpoint: 'http://localhost:3010',
+      lastSeen: new Date().toISOString(),
+      health: { current: 20, maximum: 20 }
+    }
+  ];
+  
+  res.json({ success: true, data: characters });
+});
+
+app.get('/api/dashboard/logs', (req, res) => {
+  // TODO: Get recent system logs
+  const logs = [
+    { timestamp: new Date().toISOString(), level: 'info', message: 'Dungeon Master Service started', source: 'system' },
+    { timestamp: new Date(Date.now() - 60000).toISOString(), level: 'warn', message: 'Character registration attempt failed', source: 'registry' },
+    { timestamp: new Date(Date.now() - 120000).toISOString(), level: 'info', message: 'WebSocket client connected', source: 'websocket' }
+  ];
+  
+  res.json({ success: true, data: logs });
+});
 
 // WebSocket connection handling
 io.on('connection', (socket) => {

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon Master Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            color: #ffd700;
+            font-size: 2rem;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .header .subtitle {
+            color: #888;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 215, 0, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 0.5rem;
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #ffd700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: auto;
+        }
+
+        .status-online { background-color: #4ade80; box-shadow: 0 0 10px #4ade80; }
+        .status-offline { background-color: #ef4444; }
+        .status-warning { background-color: #fbbf24; }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #ffd700;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .characters-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .character-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s ease;
+        }
+
+        .character-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+
+        .character-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffd700, #ff8c00);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 1rem;
+        }
+
+        .character-info h4 {
+            color: #e0e0e0;
+            margin-bottom: 0.25rem;
+        }
+
+        .character-info p {
+            color: #888;
+            font-size: 0.85rem;
+        }
+
+        .character-status {
+            margin-left: auto;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .character-status.online {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+
+        .logs-container {
+            max-height: 250px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .log-entry {
+            padding: 0.5rem;
+            margin: 0.25rem 0;
+            border-radius: 4px;
+            border-left: 3px solid transparent;
+        }
+
+        .log-entry.info { border-left-color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+        .log-entry.warn { border-left-color: #fbbf24; background: rgba(251, 191, 36, 0.1); }
+        .log-entry.error { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+
+        .log-timestamp {
+            color: #888;
+            font-size: 0.75rem;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #ffd700, #ff8c00);
+            color: #000;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            margin-left: auto;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            color: #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 215, 0, 0.5);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #1e40af);
+            border-color: #3b82f6;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .loading {
+            animation: pulse 2s infinite;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+            
+            .header {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            🐉 Dungeon Master Dashboard
+            <div class="status-indicator status-online" id="systemStatus"></div>
+        </h1>
+        <div class="subtitle">Real-time monitoring and control interface</div>
+    </div>
+
+    <div class="container">
+        <!-- System Overview Card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    📊 System Overview
+                </div>
+                <button class="refresh-btn" onclick="refreshOverview()">Refresh</button>
+            </div>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-value" id="uptime">--</div>
+                    <div class="stat-label">Uptime</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="activeSessions">--</div>
+                    <div class="stat-label">Active Sessions</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalCharacters">--</div>
+                    <div class="stat-label">Characters</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="connections">--</div>
+                    <div class="stat-label">Connections</div>
+                </div>
+            </div>
+            <div class="actions">
+                <a href="/api/health" target="_blank" class="btn">Health Check</a>
+                <a href="http://localhost:3010" target="_blank" class="btn btn-primary">Character UI</a>
+            </div>
+        </div>
+
+        <!-- Active Characters Card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    ⚔️ Active Characters
+                </div>
+                <button class="refresh-btn" onclick="refreshCharacters()">Refresh</button>
+            </div>
+            <div class="characters-list" id="charactersList">
+                <div class="loading">Loading characters...</div>
+            </div>
+        </div>
+
+        <!-- Session Management Card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    🎲 Session Management
+                </div>
+            </div>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-value">2</div>
+                    <div class="stat-label">Active Sessions</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">0</div>
+                    <div class="stat-label">Queued Actions</div>
+                </div>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="createSession()">New Session</button>
+                <button class="btn" onclick="showSessions()">View All</button>
+            </div>
+        </div>
+
+        <!-- System Logs Card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    📝 System Logs
+                </div>
+                <button class="refresh-btn" onclick="refreshLogs()">Refresh</button>
+            </div>
+            <div class="logs-container" id="logsContainer">
+                <div class="loading">Loading logs...</div>
+            </div>
+        </div>
+
+        <!-- WebSocket Status Card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    🔌 WebSocket Status
+                    <div class="status-indicator" id="wsStatus"></div>
+                </div>
+            </div>
+            <div class="stat-grid">
+                <div class="stat-item">
+                    <div class="stat-value" id="wsConnections">--</div>
+                    <div class="stat-label">Connections</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="wsMessages">0</div>
+                    <div class="stat-label">Messages</div>
+                </div>
+            </div>
+            <div class="actions">
+                <button class="btn" onclick="testWebSocket()">Test Connection</button>
+            </div>
+        </div>
+
+        <!-- Quick Actions Card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    ⚡ Quick Actions
+                </div>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="broadcastMessage()">Broadcast Message</button>
+                <button class="btn" onclick="viewMetrics()">View Metrics</button>
+                <button class="btn" onclick="exportLogs()">Export Logs</button>
+                <button class="btn" onclick="clearCache()">Clear Cache</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let wsMessageCount = 0;
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeWebSocket();
+            refreshOverview();
+            refreshCharacters();
+            refreshLogs();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                refreshOverview();
+                refreshCharacters();
+            }, 30000);
+        });
+
+        // WebSocket connection
+        function initializeWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`;
+            
+            try {
+                socket = io();
+                
+                socket.on('connect', () => {
+                    console.log('WebSocket connected');
+                    updateWSStatus('online');
+                });
+                
+                socket.on('disconnect', () => {
+                    console.log('WebSocket disconnected');
+                    updateWSStatus('offline');
+                });
+                
+                socket.on('game_event', (data) => {
+                    wsMessageCount++;
+                    document.getElementById('wsMessages').textContent = wsMessageCount;
+                    console.log('Game event received:', data);
+                });
+                
+            } catch (error) {
+                console.error('WebSocket connection failed:', error);
+                updateWSStatus('error');
+            }
+        }
+
+        function updateWSStatus(status) {
+            const wsStatus = document.getElementById('wsStatus');
+            wsStatus.className = 'status-indicator';
+            
+            switch(status) {
+                case 'online':
+                    wsStatus.classList.add('status-online');
+                    break;
+                case 'offline':
+                    wsStatus.classList.add('status-offline');
+                    break;
+                default:
+                    wsStatus.classList.add('status-warning');
+            }
+        }
+
+        // Refresh functions
+        async function refreshOverview() {
+            try {
+                const response = await fetch('/api/dashboard/overview');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const overview = data.data;
+                    document.getElementById('uptime').textContent = formatUptime(overview.uptime);
+                    document.getElementById('activeSessions').textContent = overview.activeSessions;
+                    document.getElementById('totalCharacters').textContent = overview.totalCharacters;
+                    document.getElementById('connections').textContent = overview.connectionsCount;
+                    document.getElementById('wsConnections').textContent = overview.connectionsCount;
+                }
+            } catch (error) {
+                console.error('Failed to refresh overview:', error);
+            }
+        }
+
+        async function refreshCharacters() {
+            try {
+                const response = await fetch('/api/dashboard/characters');
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderCharacters(data.data);
+                }
+            } catch (error) {
+                console.error('Failed to refresh characters:', error);
+                document.getElementById('charactersList').innerHTML = '<div class="error">Failed to load characters</div>';
+            }
+        }
+
+        async function refreshLogs() {
+            try {
+                const response = await fetch('/api/dashboard/logs');
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderLogs(data.data);
+                }
+            } catch (error) {
+                console.error('Failed to refresh logs:', error);
+                document.getElementById('logsContainer').innerHTML = '<div class="error">Failed to load logs</div>';
+            }
+        }
+
+        // Render functions
+        function renderCharacters(characters) {
+            const listElement = document.getElementById('charactersList');
+            
+            if (characters.length === 0) {
+                listElement.innerHTML = '<div style="text-align: center; padding: 2rem; color: #888;">No characters currently connected</div>';
+                return;
+            }
+            
+            listElement.innerHTML = characters.map(char => `
+                <div class="character-item">
+                    <div class="character-avatar">${char.name.charAt(0).toUpperCase()}</div>
+                    <div class="character-info">
+                        <h4>${char.name}</h4>
+                        <p>Level ${char.level} ${char.class} • HP: ${char.health.current}/${char.health.maximum}</p>
+                    </div>
+                    <div class="character-status ${char.status}">${char.status}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderLogs(logs) {
+            const logsElement = document.getElementById('logsContainer');
+            
+            logsElement.innerHTML = logs.map(log => `
+                <div class="log-entry ${log.level}">
+                    <div class="log-timestamp">${formatTimestamp(log.timestamp)}</div>
+                    <div>[${log.level.toUpperCase()}] ${log.message}</div>
+                </div>
+            `).join('');
+            
+            // Auto-scroll to bottom
+            logsElement.scrollTop = logsElement.scrollHeight;
+        }
+
+        // Utility functions
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${hours}h ${minutes}m`;
+        }
+
+        function formatTimestamp(timestamp) {
+            return new Date(timestamp).toLocaleTimeString();
+        }
+
+        // Action functions
+        function createSession() {
+            // TODO: Implement session creation modal
+            alert('Session creation feature coming soon!');
+        }
+
+        function showSessions() {
+            // TODO: Implement sessions view
+            alert('Sessions view coming soon!');
+        }
+
+        function testWebSocket() {
+            if (socket && socket.connected) {
+                socket.emit('test_message', { message: 'Dashboard test', timestamp: new Date().toISOString() });
+                alert('Test message sent!');
+            } else {
+                alert('WebSocket not connected');
+            }
+        }
+
+        function broadcastMessage() {
+            const message = prompt('Enter message to broadcast:');
+            if (message && socket && socket.connected) {
+                socket.emit('dm_action', {
+                    sessionId: 'all',
+                    action: 'broadcast',
+                    payload: { message: message }
+                });
+                alert('Message broadcasted!');
+            }
+        }
+
+        function viewMetrics() {
+            window.open('/api/health', '_blank');
+        }
+
+        function exportLogs() {
+            // TODO: Implement log export
+            alert('Log export feature coming soon!');
+        }
+
+        function clearCache() {
+            if (confirm('Are you sure you want to clear the cache?')) {
+                // TODO: Implement cache clearing
+                alert('Cache cleared!');
+            }
+        }
+    </script>
+
+    <!-- Socket.IO client -->
+    <script src="/socket.io/socket.io.js"></script>
+</body>
+</html>
