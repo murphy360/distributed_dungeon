@@ -3,6 +3,9 @@ const { Pool } = require('pg');
 const redis = require('redis');
 const jwt = require('jsonwebtoken');
 const winston = require('winston');
+const path = require('path');
+const fs = require('fs');
+const helmet = require('helmet');
 
 // Configure logging
 const logger = winston.createLogger({
@@ -20,7 +23,31 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 // Middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:", "data:"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", "https:", "data:"],
+      connectSrc: ["'self'", "ws:", "wss:"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+      baseUri: ["'self'"],
+      upgradeInsecureRequests: []
+    }
+  }
+}));
 app.use(express.json());
+
+// Serve static files from web directory
+const webDir = path.join(__dirname, 'web');
+app.use(express.static(webDir));
 
 // Database connection
 const pool = new Pool({
@@ -45,6 +72,16 @@ redisClient.on('error', (err) => {
 
 // Connect to Redis
 redisClient.connect().catch(console.error);
+
+// Serve main web interface
+app.get('/', (req, res) => {
+    const indexPath = path.join(webDir, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send('Dungeon map interface not found');
+    }
+});
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
@@ -209,6 +246,176 @@ app.post('/api/dungeons/:id/rooms', async (req, res) => {
         });
     }
 });
+
+// Dashboard API endpoints for web interface
+app.get('/api/dashboard/overview', async (req, res) => {
+    try {
+        // Get basic stats
+        const dungeonCount = await pool.query('SELECT COUNT(*) as count FROM dungeons');
+        const roomCount = await pool.query('SELECT COUNT(*) as count FROM dungeon_rooms');
+        
+        // Get recent activity from Redis (if available)
+        let recentActivity = [];
+        try {
+            const activity = await redisClient.lRange('dungeon:recent_activity', 0, 9);
+            recentActivity = activity.map(item => JSON.parse(item));
+        } catch (redisError) {
+            logger.warn('Could not fetch recent activity from Redis:', redisError);
+        }
+        
+        const overview = {
+            status: 'active',
+            totalDungeons: parseInt(dungeonCount.rows[0].count),
+            totalRooms: parseInt(roomCount.rows[0].count),
+            activeExplorations: 0, // TODO: Track active sessions
+            uptime: process.uptime(),
+            memory: process.memoryUsage(),
+            recentActivity: recentActivity,
+            timestamp: new Date().toISOString()
+        };
+        
+        res.json({ success: true, data: overview });
+    } catch (error) {
+        logger.error('Error fetching dashboard overview:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch overview data'
+        });
+    }
+});
+
+// Get sample dungeon map data for visualization
+app.get('/api/dungeons/:id/map', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Get dungeon info and rooms
+        const dungeonResult = await pool.query('SELECT * FROM dungeons WHERE id = $1', [id]);
+        if (dungeonResult.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Dungeon not found' });
+        }
+        
+        const roomsResult = await pool.query(`
+            SELECT room_number, name, description, room_type, connections, properties,
+                   COALESCE(properties->>'x', '0')::int as x,
+                   COALESCE(properties->>'y', '0')::int as y
+            FROM dungeon_rooms 
+            WHERE dungeon_id = $1 
+            ORDER BY room_number
+        `, [id]);
+        
+        // If no rooms exist, create sample data
+        let rooms = roomsResult.rows;
+        if (rooms.length === 0) {
+            // Generate sample dungeon layout
+            rooms = generateSampleDungeon();
+        }
+        
+        res.json({
+            success: true,
+            data: {
+                dungeon: dungeonResult.rows[0],
+                rooms: rooms,
+                grid: {
+                    width: 20,
+                    height: 15,
+                    cellSize: 30
+                }
+            }
+        });
+    } catch (error) {
+        logger.error('Error fetching dungeon map:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch dungeon map'
+        });
+    }
+});
+
+// Get real-time dungeon state
+app.get('/api/dungeons/:id/state', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Get current state from Redis if available
+        let currentState = {
+            activeCharacters: [],
+            monsters: [],
+            environmentalEffects: [],
+            timeOfDay: 'day',
+            weather: 'clear',
+            lastUpdate: new Date().toISOString()
+        };
+        
+        try {
+            const stateData = await redisClient.get(`dungeon:${id}:state`);
+            if (stateData) {
+                currentState = { ...currentState, ...JSON.parse(stateData) };
+            }
+        } catch (redisError) {
+            logger.warn('Could not fetch state from Redis:', redisError);
+        }
+        
+        res.json({ success: true, data: currentState });
+    } catch (error) {
+        logger.error('Error fetching dungeon state:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch dungeon state'
+        });
+    }
+});
+
+// Helper function to generate sample dungeon data
+function generateSampleDungeon() {
+    return [
+        {
+            room_number: 1,
+            name: "Entrance Hall",
+            description: "A grand entrance with stone pillars and flickering torches",
+            room_type: "entrance",
+            x: 5, y: 7,
+            connections: { north: 2, east: 3 },
+            properties: { lighting: "dim", temperature: "cool" }
+        },
+        {
+            room_number: 2,
+            name: "Guard Room",
+            description: "Former barracks with overturned furniture",
+            room_type: "combat",
+            x: 5, y: 5,
+            connections: { south: 1, east: 4 },
+            properties: { lighting: "dark", temperature: "cold", hasEnemies: true }
+        },
+        {
+            room_number: 3,
+            name: "Storage Chamber",
+            description: "Dusty room filled with old crates and barrels",
+            room_type: "treasure",
+            x: 8, y: 7,
+            connections: { west: 1, north: 4 },
+            properties: { lighting: "very dim", hasLoot: true }
+        },
+        {
+            room_number: 4,
+            name: "Central Chamber",
+            description: "A large circular room with a mysterious altar",
+            room_type: "boss",
+            x: 8, y: 5,
+            connections: { west: 2, south: 3, north: 5 },
+            properties: { lighting: "magical", temperature: "warm", isBossRoom: true }
+        },
+        {
+            room_number: 5,
+            name: "Treasure Vault",
+            description: "The final chamber containing ancient treasures",
+            room_type: "treasure",
+            x: 8, y: 3,
+            connections: { south: 4 },
+            properties: { lighting: "bright", hasLoot: true, isEndRoom: true }
+        }
+    ];
+}
 
 // Start server
 app.listen(PORT, () => {
