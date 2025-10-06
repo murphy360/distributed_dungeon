@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  character-container:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-production}
+    container_name: character-${CHARACTER_NAME:-unknown}
+    restart: unless-stopped
+    environment:
+      # Character configuration
+      - CHARACTER_ID=${CHARACTER_ID}
+      - CHARACTER_NAME=${CHARACTER_NAME}
+      - CHARACTER_CLASS=${CHARACTER_CLASS:-fighter}
+      - CHARACTER_LEVEL=${CHARACTER_LEVEL:-1}
+      
+      # AI configuration
+      - AI_AGGRESSIVENESS=${AI_AGGRESSIVENESS:-0.5}
+      - AI_CAUTION=${AI_CAUTION:-0.5}
+      - AI_CURIOSITY=${AI_CURIOSITY:-0.7}
+      - AI_TACTICAL=${AI_TACTICAL:-0.5}
+      
+      # Game system connection
+      - REGISTRY_URL=${REGISTRY_URL:-http://host.docker.internal:3001}
+      - GAME_SERVER_URL=${GAME_SERVER_URL:-http://host.docker.internal:3000}
+      - CHARACTER_ENDPOINT=http://character-${CHARACTER_NAME:-unknown}:3000
+      
+      # Redis connection
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - NODE_ENV=${NODE_ENV:-production}
+    ports:
+      - "${CHARACTER_PORT:-3000}:3000"
+    volumes:
+      # Persistent character data
+      - character-data:/app/data
+      - character-logs:/app/logs
+      # Development hot reload (only in development)
+      - ${PWD}/src:/app/src:${VOLUME_MOUNT_TYPE:-ro}
+    networks:
+      - dungeon-network
+      - character-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { res.statusCode === 200 ? process.exit(0) : process.exit(1); }).on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - character-redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Optional local Redis for character-specific caching
+  character-redis:
+    image: redis:7-alpine
+    container_name: character-redis-${CHARACTER_NAME:-unknown}
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redispass123}
+    ports:
+      - "${CHARACTER_REDIS_PORT:-6380}:6379"
+    volumes:
+      - character-redis-data:/data
+    networks:
+      - character-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  character-data:
+    driver: local
+    name: character-data-${CHARACTER_NAME:-unknown}
+  character-logs:
+    driver: local
+    name: character-logs-${CHARACTER_NAME:-unknown}
+  character-redis-data:
+    driver: local
+    name: character-redis-data-${CHARACTER_NAME:-unknown}
+
+networks:
+  dungeon-network:
+    external: true
+  character-network:
+    driver: bridge
+    name: character-network-${CHARACTER_NAME:-unknown}
