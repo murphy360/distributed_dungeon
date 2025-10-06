@@ -42,6 +42,7 @@ class CharacterAPI {
           defaultSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'", "https:", "data:"],
           scriptSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrcAttr: ["'unsafe-inline'"],
           imgSrc: ["'self'", "data:", "https:"],
           fontSrc: ["'self'", "https:", "data:"],
           connectSrc: ["'self'"],
