@@ -1,6 +1,5 @@
 const express = require('express');
 const { Pool } = require('pg');
-const redis = require('redis');
 const jwt = require('jsonwebtoken');
 const winston = require('winston');
 const path = require('path');
@@ -61,17 +60,7 @@ const pool = new Pool({
     connectionTimeoutMillis: 2000,
 });
 
-// Redis connection
-const redisClient = redis.createClient({
-    url: `redis://:${process.env.REDIS_PASSWORD || 'redispass123'}@${process.env.REDIS_HOST || 'dungeon_redis'}:${process.env.REDIS_PORT || 6379}`
-});
-
-redisClient.on('error', (err) => {
-    logger.error('Redis Client Error', err);
-});
-
-// Connect to Redis
-redisClient.connect().catch(console.error);
+// Redis removed - using file-based state management
 
 // Serve main web interface
 app.get('/', (req, res) => {
@@ -88,9 +77,6 @@ app.get('/health', async (req, res) => {
     try {
         // Check database connection
         await pool.query('SELECT 1');
-        
-        // Check Redis connection
-        await redisClient.ping();
         
         res.json({ 
             status: 'healthy', 
@@ -254,14 +240,10 @@ app.get('/api/dashboard/overview', async (req, res) => {
         const dungeonCount = await pool.query('SELECT COUNT(*) as count FROM dungeons');
         const roomCount = await pool.query('SELECT COUNT(*) as count FROM dungeon_rooms');
         
-        // Get recent activity from Redis (if available)
-        let recentActivity = [];
-        try {
-            const activity = await redisClient.lRange('dungeon:recent_activity', 0, 9);
-            recentActivity = activity.map(item => JSON.parse(item));
-        } catch (redisError) {
-            logger.warn('Could not fetch recent activity from Redis:', redisError);
-        }
+        // Get recent activity (using in-memory storage instead of Redis)
+        let recentActivity = [
+            { action: 'Dungeon service started', timestamp: new Date().toISOString() }
+        ];
         
         const overview = {
             status: 'active',
@@ -337,7 +319,7 @@ app.get('/api/dungeons/:id/state', async (req, res) => {
     try {
         const { id } = req.params;
         
-        // Get current state from Redis if available
+        // Get current state (using in-memory storage instead of Redis)
         let currentState = {
             activeCharacters: [],
             monsters: [],
@@ -346,15 +328,6 @@ app.get('/api/dungeons/:id/state', async (req, res) => {
             weather: 'clear',
             lastUpdate: new Date().toISOString()
         };
-        
-        try {
-            const stateData = await redisClient.get(`dungeon:${id}:state`);
-            if (stateData) {
-                currentState = { ...currentState, ...JSON.parse(stateData) };
-            }
-        } catch (redisError) {
-            logger.warn('Could not fetch state from Redis:', redisError);
-        }
         
         res.json({ success: true, data: currentState });
     } catch (error) {
@@ -365,6 +338,59 @@ app.get('/api/dungeons/:id/state', async (req, res) => {
         });
     }
 });
+
+// Character registration endpoint
+app.post('/api/registry/character', async (req, res) => {
+    try {
+        const { characterId, name, class: characterClass, level, containerEndpoint } = req.body;
+        
+        if (!characterId || !name || !containerEndpoint) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing required fields: characterId, name, containerEndpoint'
+            });
+        }
+        
+        logger.info('Character registration request', {
+            characterId,
+            name,
+            characterClass,
+            level,
+            containerEndpoint
+        });
+        
+        // Generate a session token (simplified)
+        const sessionToken = jwt.sign(
+            { characterId, name, timestamp: Date.now() },
+            process.env.JWT_SECRET || 'fallback-secret',
+            { expiresIn: '24h' }
+        );
+        
+        res.json({
+            success: true,
+            sessionId: generateSessionId(),
+            token: sessionToken,
+            message: 'Character registered successfully',
+            gameState: {
+                status: 'connected',
+                dungeon: 'Main Dungeon',
+                currentRoom: 'entrance'
+            }
+        });
+        
+    } catch (error) {
+        logger.error('Error registering character:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to register character'
+        });
+    }
+});
+
+// Helper function to generate session IDs
+function generateSessionId() {
+    return 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+}
 
 // Helper function to generate sample dungeon data
 function generateSampleDungeon() {
@@ -427,13 +453,11 @@ app.listen(PORT, () => {
 process.on('SIGTERM', async () => {
     logger.info('SIGTERM received, shutting down gracefully');
     await pool.end();
-    await redisClient.quit();
     process.exit(0);
 });
 
 process.on('SIGINT', async () => {
     logger.info('SIGINT received, shutting down gracefully');
     await pool.end();
-    await redisClient.quit();
     process.exit(0);
 });

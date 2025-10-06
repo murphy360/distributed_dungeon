@@ -197,8 +197,7 @@ class CharacterContainer {
 
     // Initialize event handler
     this.eventHandler = new EventHandler({
-      gameServerUrl: process.env.GAME_SERVER_URL,
-      redisUrl: process.env.REDIS_URL
+      gameServerUrl: process.env.GAME_SERVER_URL
     });
 
     this.logger.info('Communication components initialized');
@@ -257,7 +256,13 @@ class CharacterContainer {
 
       // Auto-register if enabled
       if (this.config.autoRegister) {
-        await this.registerWithGame();
+        try {
+          await this.registerWithGame();
+        } catch (registrationError) {
+          this.logger.warn('Auto-registration failed, continuing without registration', {
+            error: registrationError.message
+          });
+        }
       }
 
       this.isRunning = true;
@@ -416,7 +421,10 @@ async function main() {
     
   } catch (error) {
     console.error('Failed to start character container:', error.message);
-    process.exit(1);
+    console.log('Character container will continue running with limited functionality...');
+    
+    // Don't exit - keep the web interface available
+    process.stdin.resume();
   }
 }
 

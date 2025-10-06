@@ -1,4 +1,44 @@
-# Distributed Dungeon
+# Distributed Dungeon System
+
+A comprehensive microservices-based D&D 5e digital tabletop system with AI-powered dungeon mastering capabilities.
+
+## 🎯 Quick Start
+
+1. **Start the entire system:**
+   ```powershell
+   .\start-system.ps1
+   ```
+
+2. **Access the web interfaces:**
+   - **Dungeon Explorer**: http://localhost:3000 (Interactive dungeon map)
+   - **Monster Compendium**: http://localhost:3007 (Monster browser & encounter builder)
+
+3. **Manage the system:**
+   ```powershell
+   .\manage-system.ps1 -Action status    # Check system health
+   .\manage-system.ps1 -Action logs      # View service logs  
+   .\manage-system.ps1 -Action stop      # Stop all services
+   ```
+
+## 🌐 System Architecture
+
+The system consists of multiple microservices orchestrated via Docker Compose:
+
+- **Dungeon Master Service** (3001) - Central AI orchestration
+- **Dungeon Service** (3000/3002) - Map visualization and state management
+- **Monster Service** (3007/3003) - Creature compendium and encounters
+- **Player Service** (3004) - Character management
+- **Communication Service** (3005) - Discord & Meshtastic integration
+- **Rules Engine** (3006) - D&D 5e rule processing
+- **PostgreSQL Database** (5432) - Persistent data storage
+- **Redis Cache** (6379) - Session and real-time data
+
+## 📚 Documentation
+
+- [Docker Compose Guide](./DOCKER-COMPOSE-GUIDE.md) - Complete orchestration documentation
+- [Container Architecture](./CONTAINER_ARCHITECTURE.md) - System interaction diagrams
+
+# distributed_dungeon
 
 A distributed RPG platform built with microservices architecture, featuring AI-powered dungeon masters, real-time gameplay, and multi-platform communication.
 

@@ -435,6 +435,9 @@
             <div class="card actions-section">
                 <h2><i class="fas fa-bolt"></i> Actions</h2>
                 <div class="action-buttons">
+                    <button class="action-btn btn-primary" onclick="connectToDungeon()" id="connectBtn">
+                        <i class="fas fa-plug"></i> Connect to Dungeon
+                    </button>
                     <button class="action-btn btn-success" onclick="saveCharacter()">
                         <i class="fas fa-save"></i> Save Character
                     </button>
@@ -757,7 +760,7 @@
         }
 
         // Update status bar
-        function updateStatusBar() {
+        async function updateStatusBar() {
             const statusBar = document.getElementById('statusBar');
             statusBar.innerHTML = '';
 
@@ -765,10 +768,41 @@
             const healthStatus = characterData?.derivedStats?.isAlive ? 'healthy' : 'injured';
             addStatusIndicator(statusBar, healthStatus, healthStatus === 'healthy' ? 'Healthy' : 'Injured');
 
-            // Connection status
-            const connected = characterData?.session?.connected;
-            addStatusIndicator(statusBar, connected ? 'connected' : 'disconnected', 
-                              connected ? 'Connected' : 'Disconnected');
+            // Dungeon connection status
+            try {
+                const dungeonResponse = await fetch('/api/dungeon/status');
+                const dungeonStatus = await dungeonResponse.json();
+                
+                if (dungeonStatus.success && dungeonStatus.connected) {
+                    const dungeonName = dungeonStatus.connection?.name || 'Unknown Dungeon';
+                    addStatusIndicator(statusBar, 'connected', `Connected to ${dungeonName}`);
+                    
+                    // Update connect button
+                    const connectBtn = document.getElementById('connectBtn');
+                    if (connectBtn) {
+                        connectBtn.innerHTML = '<i class="fas fa-unlink"></i> Change Dungeon';
+                        connectBtn.className = 'action-btn btn-warning';
+                    }
+                } else {
+                    addStatusIndicator(statusBar, 'disconnected', 'Not Connected to Dungeon');
+                    
+                    // Update connect button
+                    const connectBtn = document.getElementById('connectBtn');
+                    if (connectBtn) {
+                        connectBtn.innerHTML = '<i class="fas fa-plug"></i> Connect to Dungeon';
+                        connectBtn.className = 'action-btn btn-primary';
+                    }
+                }
+                
+                // Registration status
+                if (dungeonStatus.success && dungeonStatus.registration?.isRegistered) {
+                    addStatusIndicator(statusBar, 'ai-enabled', 'Registered');
+                }
+                
+            } catch (error) {
+                console.error('Error getting dungeon status:', error);
+                addStatusIndicator(statusBar, 'disconnected', 'Connection Unknown');
+            }
 
             // AI status
             if (aiSettings?.enabled) {
@@ -806,6 +840,49 @@
 
         function viewLogs() {
             window.open('/logs', '_blank');
+        }
+
+        // Dungeon connection functions
+        async function connectToDungeon() {
+            // Check current connection status first
+            try {
+                const statusResponse = await fetch('/api/dungeon/status');
+                const statusResult = await statusResponse.json();
+                
+                if (statusResult.success && statusResult.connected) {
+                    // Already connected, ask if user wants to disconnect or change connection
+                    const action = confirm('You are already connected to a dungeon. Do you want to disconnect and connect to a different dungeon?');
+                    if (!action) return;
+                    
+                    // Disconnect first
+                    await disconnectFromDungeon();
+                }
+                
+                // Navigate to connection page
+                window.location.href = '/connect';
+                
+            } catch (error) {
+                console.error('Error checking connection status:', error);
+                // If status check fails, just go to connection page
+                window.location.href = '/connect';
+            }
+        }
+
+        async function disconnectFromDungeon() {
+            try {
+                const response = await fetch('/api/dungeon/disconnect', { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('Disconnected from dungeon');
+                    await loadCharacterData(); // Refresh to update connection status
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Disconnect error:', error);
+                showError('Failed to disconnect: ' + error.message);
+            }
         }
 
         // Utility functions

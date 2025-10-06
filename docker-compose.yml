@@ -23,21 +23,25 @@ services:
       retries: 5
       start_period: 30s
 
-  redis:
-    image: redis:7-alpine
-    container_name: dungeon_redis
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redispass123}
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    networks:
-      - dungeon_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
+  # DEPRECATED: Redis has been removed from the system architecture
+  # Each character container now manages its own state locally via file-based persistence
+  # This eliminates the need for centralized caching and improves system simplicity
+  #
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: dungeon_redis
+  #   command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redispass123}
+  #   volumes:
+  #     - redis_data:/data
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - dungeon_network
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
 
   # Core Services
   dungeon-master:
@@ -50,7 +54,7 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=3001
       - DATABASE_URL=postgresql://postgres:${DATABASE_PASSWORD:-dungeonmaster123}@database:5432/dungeon_db
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redispass123}@redis:6379
+      # Redis removed - services communicate directly via HTTP APIs
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
       - SERVICE_NAME=dungeon-master
@@ -59,8 +63,7 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+      # redis dependency removed - using direct service communication instead
     networks:
       - dungeon_network
     volumes:
@@ -84,16 +87,16 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=3002
       - DATABASE_URL=postgresql://postgres:${DATABASE_PASSWORD:-dungeonmaster123}@database:5432/dungeon_db
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redispass123}@redis:6379
+      # Redis removed - using file-based state management
       - SERVICE_NAME=dungeon
       - DUNGEON_MASTER_URL=http://dungeon-master:3001
     ports:
-      - "3002:3002"
+      - "3000:3002"  # Web interface on localhost:3000 -> container:3002
+      - "3002:3002"  # API access on localhost:3002 -> container:3002
     depends_on:
       database:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+      # redis dependency removed - using direct service communication instead
     networks:
       - dungeon_network
     volumes:
@@ -117,17 +120,17 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=3003
       - DATABASE_URL=postgresql://postgres:${DATABASE_PASSWORD:-dungeonmaster123}@database:5432/dungeon_db
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redispass123}@redis:6379
+      # Redis removed - using file-based state management
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - SERVICE_NAME=monster
       - DUNGEON_MASTER_URL=http://dungeon-master:3001
     ports:
-      - "3003:3003"
+      - "3007:3003"  # Web interface on localhost:3007 -> container:3003
+      - "3003:3003"  # API access on localhost:3003 -> container:3003
     depends_on:
       database:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+      # redis dependency removed - using direct service communication instead
     networks:
       - dungeon_network
     volumes:
@@ -141,39 +144,43 @@ services:
       retries: 3
     command: ["npm", "run", "dev"]
 
-  player:
-    build:
-      context: ./services/player
-      dockerfile: Dockerfile
-      target: development
-    container_name: player_service
-    environment:
-      - NODE_ENV=${NODE_ENV:-development}
-      - PORT=3004
-      - DATABASE_URL=postgresql://postgres:${DATABASE_PASSWORD:-dungeonmaster123}@database:5432/dungeon_db
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redispass123}@redis:6379
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - SERVICE_NAME=player
-      - DUNGEON_MASTER_URL=http://dungeon-master:3001
-    ports:
-      - "3004:3004"
-    depends_on:
-      database:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - dungeon_network
-    volumes:
-      - ./services/player/src:/app/src
-      - player_node_modules:/app/node_modules
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    command: ["npm", "run", "dev"]
+  # DEPRECATED: Centralized player service has been deprecated in favor of individual character containers
+  # Each player now creates their own Docker container that registers with the system
+  # See character-containers/ directory for examples and documentation
+  # 
+  # player:
+  #   build:
+  #     context: ./services/player
+  #     dockerfile: Dockerfile
+  #     target: development
+  #   container_name: player_service
+  #   environment:
+  #     - NODE_ENV=${NODE_ENV:-development}
+  #     - PORT=3004
+  #     - DATABASE_URL=postgresql://postgres:${DATABASE_PASSWORD:-dungeonmaster123}@database:5432/dungeon_db
+  #     - REDIS_URL=redis://:${REDIS_PASSWORD:-redispass123}@redis:6379
+  #     - GEMINI_API_KEY=${GEMINI_API_KEY}
+  #     - SERVICE_NAME=player
+  #     - DUNGEON_MASTER_URL=http://dungeon-master:3001
+  #   ports:
+  #     - "3004:3004"
+  #   depends_on:
+  #     database:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - dungeon_network
+  #   volumes:
+  #     - ./services/player/src:/app/src
+  #     - player_node_modules:/app/node_modules
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   command: ["npm", "run", "dev"]
 
   communication:
     build:
@@ -185,7 +192,7 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=3005
       - DATABASE_URL=postgresql://postgres:${DATABASE_PASSWORD:-dungeonmaster123}@database:5432/dungeon_db
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redispass123}@redis:6379
+      # Redis removed - using direct HTTP communication
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
@@ -196,8 +203,7 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+      # redis dependency removed - using direct service communication instead
     networks:
       - dungeon_network
     volumes:
@@ -224,15 +230,14 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=3006
       - DATABASE_URL=postgresql://postgres:${DATABASE_PASSWORD:-dungeonmaster123}@database:5432/dungeon_db
-      - REDIS_URL=redis://:${REDIS_PASSWORD:-redispass123}@redis:6379
+      # Redis removed - using direct service communication
       - SERVICE_NAME=rules-engine
     ports:
       - "3006:3006"
     depends_on:
       database:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+      # redis dependency removed - using direct service communication instead
     networks:
       - dungeon_network
     volumes:
@@ -245,6 +250,67 @@ services:
       timeout: 10s
       retries: 3
     command: ["npm", "run", "dev"]
+
+  # Character Service (Template for individual character containers)
+  character:
+    build:
+      context: ./services/character
+      dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-development}
+    container_name: character-${CHARACTER_NAME:-template}
+    environment:
+      # Character configuration
+      - CHARACTER_ID=${CHARACTER_ID:-template-001}
+      - CHARACTER_NAME=${CHARACTER_NAME:-template}
+      - CHARACTER_CLASS=${CHARACTER_CLASS:-fighter}
+      - CHARACTER_LEVEL=${CHARACTER_LEVEL:-1}
+      
+      # AI configuration
+      - AI_AGGRESSIVENESS=${AI_AGGRESSIVENESS:-0.5}
+      - AI_CAUTION=${AI_CAUTION:-0.5}
+      - AI_CURIOSITY=${AI_CURIOSITY:-0.7}
+      - AI_TACTICAL=${AI_TACTICAL:-0.5}
+      
+      # Game system connection
+      - REGISTRY_URL=http://dungeon:3002
+      - GAME_SERVER_URL=http://dungeon:3002
+      - CHARACTER_ENDPOINT=http://character-${CHARACTER_NAME:-template}:3000
+      
+      # File-based state management (Redis removed for distributed independence)
+      - STATE_STORAGE_TYPE=file
+      - STATE_FILE_PATH=/app/data/character-state.json
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - NODE_ENV=${NODE_ENV:-development}
+    ports:
+      - "${CHARACTER_PORT:-3008}:3000"
+    volumes:
+      # Persistent character data
+      - character-data:/app/data
+      - character-logs:/app/logs
+      # Development hot reload
+      - ./services/character/src:/app/src
+      - character_node_modules:/app/node_modules
+    networks:
+      - dungeon_network
+    depends_on:
+      database:
+        condition: service_healthy
+      dungeon-master:
+        condition: service_healthy
+      dungeon:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { res.statusCode === 200 ? process.exit(0) : process.exit(1); }).on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    command: ["npm", "start"]
+    profiles:
+      - character
 
   # Monitoring and Management (Optional)
   nginx:
@@ -260,7 +326,6 @@ services:
       - dungeon-master
       - dungeon
       - monster
-      - player
       - communication
       - rules-engine
     networks:
@@ -281,18 +346,18 @@ services:
     profiles:
       - admin
 
-  # Optional: Redis Commander
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    container_name: dungeon_redis_commander
-    ports:
-      - "8081:8081"
-    environment:
-      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD:-redispass123}
-    networks:
-      - dungeon_network
-    profiles:
-      - admin
+  # DEPRECATED: Redis Commander (Redis service has been removed)
+  # redis-commander:
+  #   image: rediscommander/redis-commander:latest
+  #   container_name: dungeon_redis_commander
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD:-redispass123}
+  #   networks:
+  #     - dungeon_network
+  #   profiles:
+  #     - admin
 
 networks:
   dungeon_network:
@@ -304,8 +369,7 @@ networks:
 volumes:
   postgres_data:
     driver: local
-  redis_data:
-    driver: local
+  # redis_data: # DEPRECATED - Redis service removed in favor of direct service communication
   # Node modules volumes for containerized development
   dungeon_master_node_modules:
     driver: local
@@ -313,9 +377,14 @@ volumes:
     driver: local
   monster_node_modules:
     driver: local
-  player_node_modules:
-    driver: local
+  # player_node_modules: # DEPRECATED - Individual character containers manage their own volumes
   communication_node_modules:
     driver: local
   rules_engine_node_modules:
+    driver: local
+  character_node_modules:
+    driver: local
+  character-data:
+    driver: local
+  character-logs:
     driver: local

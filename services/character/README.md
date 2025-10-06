@@ -18,7 +18,7 @@ This is the base template for creating distributed character containers for the 
 
 ```bash
 # Copy the base template
-cp -r character-containers/base-character my-character
+cp -r services/character my-character
 
 # Navigate to your character directory
 cd my-character

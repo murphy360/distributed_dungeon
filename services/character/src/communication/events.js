@@ -1,5 +1,4 @@
 const io = require('socket.io-client');
-const redis = require('redis');
 const winston = require('winston');
 
 // Event handling system for real-time game communication
@@ -7,7 +6,6 @@ class EventHandler {
   constructor(config = {}) {
     this.config = {
       gameServerUrl: config.gameServerUrl || process.env.GAME_SERVER_URL || 'http://localhost:3001',
-      redisUrl: config.redisUrl || process.env.REDIS_URL || 'redis://:redispass123@localhost:6379',
       eventChannels: config.eventChannels || ['combat', 'exploration', 'social', 'system'],
       reconnectAttempts: config.reconnectAttempts || 10,
       reconnectDelay: config.reconnectDelay || 2000,
@@ -28,7 +26,6 @@ class EventHandler {
 
     this.character = null;
     this.socket = null;
-    this.redisClient = null;
     this.isConnected = false;
     this.eventHandlers = new Map();
     this.reconnectCount = 0;
@@ -40,14 +37,8 @@ class EventHandler {
     this.authToken = authToken;
 
     try {
-      // Initialize Redis connection for pub/sub
-      await this.initializeRedis();
-      
       // Initialize WebSocket connection
       await this.initializeWebSocket();
-
-      // Subscribe to event channels
-      this.subscribeToEventChannels();
 
       this.logger.info('Event system initialized', {
         characterId: character.characterId,
@@ -65,31 +56,7 @@ class EventHandler {
     }
   }
 
-  // Initialize Redis connection
-  async initializeRedis() {
-    try {
-      this.redisClient = redis.createClient({
-        url: this.config.redisUrl
-      });
 
-      this.redisClient.on('error', (error) => {
-        this.logger.error('Redis client error', { error: error.message });
-      });
-
-      this.redisClient.on('connect', () => {
-        this.logger.info('Redis client connected');
-      });
-
-      this.redisClient.on('disconnect', () => {
-        this.logger.warn('Redis client disconnected');
-      });
-
-      await this.redisClient.connect();
-    } catch (error) {
-      this.logger.error('Failed to initialize Redis', { error: error.message });
-      throw error;
-    }
-  }
 
   // Initialize WebSocket connection
   async initializeWebSocket() {
@@ -165,29 +132,7 @@ class EventHandler {
     });
   }
 
-  // Subscribe to Redis event channels
-  subscribeToEventChannels() {
-    this.config.eventChannels.forEach(channel => {
-      const channelName = `game:${channel}`;
-      
-      this.redisClient.subscribe(channelName, (message) => {
-        try {
-          const eventData = JSON.parse(message);
-          this.handleRedisEvent(channel, eventData);
-        } catch (error) {
-          this.logger.error('Failed to parse Redis event', {
-            channel: channelName,
-            error: error.message
-          });
-        }
-      });
 
-      this.logger.info('Subscribed to event channel', {
-        characterId: this.character.characterId,
-        channel: channelName
-      });
-    });
-  }
 
   // Handle game events from WebSocket
   async handleGameEvent(eventData) {
@@ -365,17 +310,7 @@ class EventHandler {
     }
   }
 
-  // Handle Redis pub/sub events
-  async handleRedisEvent(channel, eventData) {
-    this.logger.info('Redis event received', {
-      characterId: this.character.characterId,
-      channel,
-      eventType: eventData.type
-    });
 
-    // Process Redis events similar to WebSocket events
-    await this.handleGameEvent(eventData);
-  }
 
   // Send event to game system
   async sendEvent(eventType, eventData) {
@@ -414,28 +349,7 @@ class EventHandler {
     }
   }
 
-  // Publish event to Redis
-  async publishEvent(channel, eventData) {
-    try {
-      const channelName = `game:${channel}`;
-      await this.redisClient.publish(channelName, JSON.stringify(eventData));
-      
-      this.logger.info('Event published to Redis', {
-        characterId: this.character.characterId,
-        channel: channelName
-      });
-      
-      return { success: true };
-    } catch (error) {
-      this.logger.error('Failed to publish event to Redis', {
-        characterId: this.character.characterId,
-        channel,
-        error: error.message
-      });
-      
-      return { success: false, error: error.message };
-    }
-  }
+
 
   // Submit automatic action (for AI characters)
   async submitAutoAction(action) {
@@ -508,11 +422,6 @@ class EventHandler {
         this.socket = null;
       }
 
-      if (this.redisClient) {
-        await this.redisClient.quit();
-        this.redisClient = null;
-      }
-
       this.isConnected = false;
 
       this.logger.info('Event system disconnected', {
@@ -532,7 +441,6 @@ class EventHandler {
     return {
       isConnected: this.isConnected,
       hasSocket: this.socket !== null,
-      hasRedis: this.redisClient !== null,
       reconnectCount: this.reconnectCount
     };
   }

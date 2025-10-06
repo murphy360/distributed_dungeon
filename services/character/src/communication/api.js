@@ -465,6 +465,241 @@ class CharacterAPI {
       }
     });
 
+    // Test dungeon connection
+    this.app.post('/api/dungeon/test',
+      [
+        body('url').isURL(),
+        body('timeout').optional().isInt({ min: 1000, max: 60000 }),
+        body('password').optional().isString()
+      ],
+      async (req, res) => {
+        try {
+          const errors = validationResult(req);
+          if (!errors.isEmpty()) {
+            return res.status(400).json({
+              success: false,
+              errors: errors.array()
+            });
+          }
+
+          const { url, timeout = 10000, password } = req.body;
+          
+          this.logger.info('Testing dungeon connection', { url });
+
+          const axios = require('axios');
+          const testResponse = await axios.get(url, {
+            timeout,
+            headers: {
+              'User-Agent': 'Character-Container/1.0.0',
+              ...(password && { 'Authorization': `Bearer ${password}` })
+            },
+            validateStatus: () => true // Accept any status code
+          });
+
+          let dungeonInfo = null;
+          if (testResponse.status === 200 && testResponse.data) {
+            dungeonInfo = {
+              name: testResponse.data.name || testResponse.data.service || 'Unknown Dungeon',
+              version: testResponse.data.version,
+              status: testResponse.data.status,
+              uptime: testResponse.data.uptime
+            };
+          }
+
+          res.json({
+            success: testResponse.status === 200,
+            status: testResponse.status,
+            dungeonInfo,
+            message: testResponse.status === 200 ? 'Connection successful' : `HTTP ${testResponse.status}`
+          });
+
+        } catch (error) {
+          this.logger.error('Dungeon connection test failed', { 
+            url: req.body.url,
+            error: error.message 
+          });
+          
+          let errorMessage = 'Connection failed';
+          if (error.code === 'ECONNREFUSED') {
+            errorMessage = 'Connection refused - dungeon server may be offline';
+          } else if (error.code === 'ENOTFOUND') {
+            errorMessage = 'Host not found - check the server address';
+          } else if (error.code === 'ETIMEDOUT') {
+            errorMessage = 'Connection timed out';
+          } else if (error.response) {
+            errorMessage = `Server responded with ${error.response.status}`;
+          }
+
+          res.json({
+            success: false,
+            error: errorMessage,
+            code: error.code
+          });
+        }
+      }
+    );
+
+    // Connect to dungeon and register
+    this.app.post('/api/dungeon/connect',
+      [
+        body('dungeonHost').isString().notEmpty(),
+        body('dungeonPort').isInt({ min: 1, max: 65535 }),
+        body('dungeonPassword').optional().isString(),
+        body('characterEndpoint').isURL(),
+        body('autoRegister').isBoolean(),
+        body('retryAttempts').optional().isInt({ min: 1, max: 20 }),
+        body('timeout').optional().isInt({ min: 5, max: 60 }),
+        body('useHttps').optional().isBoolean()
+      ],
+      async (req, res) => {
+        try {
+          const errors = validationResult(req);
+          if (!errors.isEmpty()) {
+            return res.status(400).json({
+              success: false,
+              errors: errors.array()
+            });
+          }
+
+          const {
+            dungeonHost,
+            dungeonPort,
+            dungeonPassword,
+            dungeonName,
+            characterEndpoint,
+            autoRegister,
+            retryAttempts = 5,
+            timeout = 10,
+            useHttps = false
+          } = req.body;
+
+          // Build dungeon URL
+          const protocol = useHttps ? 'https' : 'http';
+          const dungeonUrl = `${protocol}://${dungeonHost}:${dungeonPort}`;
+
+          this.logger.info('Connecting to dungeon', { 
+            dungeonUrl,
+            characterEndpoint,
+            autoRegister 
+          });
+
+          // Update registry configuration
+          this.registry.config.registryUrl = dungeonUrl;
+          this.registry.config.characterEndpoint = characterEndpoint;
+          this.registry.config.retryAttempts = retryAttempts;
+          this.registry.config.retryDelay = timeout * 1000;
+
+          // Store connection details in character state
+          this.character.state.updateState({
+            dungeonConnection: {
+              host: dungeonHost,
+              port: dungeonPort,
+              name: dungeonName,
+              protocol,
+              password: dungeonPassword,
+              endpoint: characterEndpoint,
+              autoRegister,
+              connectedAt: new Date().toISOString()
+            }
+          });
+
+          // Save updated state
+          this.character.save();
+
+          // Attempt registration if auto-register is enabled
+          let registrationResult = null;
+          if (autoRegister) {
+            try {
+              registrationResult = await this.registry.registerCharacter(this.character);
+              
+              if (registrationResult.success) {
+                // Initialize event system with authentication token
+                await this.eventHandler.initialize(this.character, registrationResult.token);
+              }
+            } catch (regError) {
+              this.logger.warn('Auto-registration failed', { error: regError.message });
+              // Don't fail the connection if registration fails
+              registrationResult = { success: false, error: regError.message };
+            }
+          }
+
+          res.json({
+            success: true,
+            message: 'Successfully connected to dungeon',
+            dungeonUrl,
+            registration: registrationResult,
+            autoRegistered: autoRegister && registrationResult?.success
+          });
+
+        } catch (error) {
+          this.logger.error('Dungeon connection failed', { error: error.message });
+          res.status(500).json({
+            success: false,
+            error: error.message
+          });
+        }
+      }
+    );
+
+    // Get current dungeon connection status
+    this.app.get('/api/dungeon/status', (req, res) => {
+      try {
+        const characterState = this.character.state.getState();
+        const connectionInfo = characterState.dungeonConnection;
+        const registrationStatus = this.registry.getSessionInfo();
+
+        res.json({
+          success: true,
+          connected: !!connectionInfo,
+          connection: connectionInfo,
+          registration: {
+            isRegistered: registrationStatus.hasToken,
+            sessionId: registrationStatus.sessionId,
+            registrationData: registrationStatus.registrationData
+          }
+        });
+      } catch (error) {
+        this.logger.error('Failed to get dungeon status', { error: error.message });
+        res.status(500).json({
+          success: false,
+          error: error.message
+        });
+      }
+    });
+
+    // Disconnect from dungeon
+    this.app.post('/api/dungeon/disconnect', async (req, res) => {
+      try {
+        // Unregister from game system
+        if (this.registry.isRegistered()) {
+          await this.registry.unregisterCharacter(this.character);
+        }
+
+        // Disconnect event handler
+        if (this.eventHandler) {
+          await this.eventHandler.disconnect();
+        }
+
+        // Clear connection info from character state
+        this.character.state.updateState({
+          dungeonConnection: null
+        });
+        this.character.save();
+
+        res.json({
+          success: true,
+          message: 'Disconnected from dungeon'
+        });
+
+      } catch (error) {
+        this.logger.error('Dungeon disconnection failed', { error: error.message });
+        res.status(500).json({
+          success: false,
+          error: error.message
+        });
+      }
+    });
+
     // Debug endpoint (only in development)
     if (process.env.NODE_ENV === 'development') {
       this.app.get('/debug', (req, res) => {
@@ -550,6 +785,28 @@ class CharacterAPI {
       } catch (error) {
         this.logger.error('Error serving logs interface', { error: error.message });
         res.status(500).send('Error loading logs interface');
+      }
+    });
+
+    // Serve the dungeon connection interface
+    this.app.get('/connect', (req, res) => {
+      try {
+        const connectPath = path.join(webDir, 'connect.html');
+        if (fs.existsSync(connectPath)) {
+          let html = fs.readFileSync(connectPath, 'utf8');
+          
+          // Replace template variables
+          const characterInfo = this.character.getCharacterInfo();
+          html = html.replace(/{{CHARACTER_NAME}}/g, characterInfo.name || 'Unknown Character');
+          
+          res.setHeader('Content-Type', 'text/html');
+          res.send(html);
+        } else {
+          res.status(404).send('Connection interface not found');
+        }
+      } catch (error) {
+        this.logger.error('Error serving connection interface', { error: error.message });
+        res.status(500).send('Error loading connection interface');
       }
     });
 
