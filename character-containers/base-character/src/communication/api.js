@@ -1,4 +1,6 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -34,7 +36,25 @@ class CharacterAPI {
   // Setup Express middleware
   setupMiddleware() {
     // Security middleware
-    this.app.use(helmet());
+    this.app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https:", "data:"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", "data:", "https:"],
+          fontSrc: ["'self'", "https:", "data:"],
+          connectSrc: ["'self'"],
+          frameSrc: ["'none'"],
+          objectSrc: ["'none'"],
+          mediaSrc: ["'self'"],
+          formAction: ["'self'"],
+          frameAncestors: ["'self'"],
+          baseUri: ["'self'"],
+          upgradeInsecureRequests: []
+        }
+      }
+    }));
     this.app.use(cors({
       origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
       credentials: true
@@ -472,6 +492,9 @@ class CharacterAPI {
       });
     });
 
+    // Web interface routes
+    this.setupWebInterface();
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).json({
@@ -479,6 +502,112 @@ class CharacterAPI {
         error: 'Endpoint not found'
       });
     });
+  }
+
+  // Setup web interface for character sheet
+  setupWebInterface() {
+    const webDir = path.join(__dirname, '..', 'web');
+    
+    // Serve the main character sheet interface
+    this.app.get('/', (req, res) => {
+      try {
+        const indexPath = path.join(webDir, 'index.html');
+        if (fs.existsSync(indexPath)) {
+          let html = fs.readFileSync(indexPath, 'utf8');
+          
+          // Replace template variables
+          const characterInfo = this.character.getCharacterInfo();
+          html = html.replace(/{{CHARACTER_NAME}}/g, characterInfo.name || 'Unknown Character');
+          
+          res.setHeader('Content-Type', 'text/html');
+          res.send(html);
+        } else {
+          res.status(404).send('Character sheet interface not found');
+        }
+      } catch (error) {
+        this.logger.error('Error serving character sheet', { error: error.message });
+        res.status(500).send('Error loading character sheet');
+      }
+    });
+
+    // Serve the logs interface
+    this.app.get('/logs', (req, res) => {
+      try {
+        const logsPath = path.join(webDir, 'logs.html');
+        if (fs.existsSync(logsPath)) {
+          let html = fs.readFileSync(logsPath, 'utf8');
+          
+          // Replace template variables
+          const characterInfo = this.character.getCharacterInfo();
+          html = html.replace(/{{CHARACTER_NAME}}/g, characterInfo.name || 'Unknown Character');
+          
+          res.setHeader('Content-Type', 'text/html');
+          res.send(html);
+        } else {
+          res.status(404).send('Logs interface not found');
+        }
+      } catch (error) {
+        this.logger.error('Error serving logs interface', { error: error.message });
+        res.status(500).send('Error loading logs interface');
+      }
+    });
+
+    // API endpoint to get actual log data
+    this.app.get('/api/logs', (req, res) => {
+      try {
+        const logsDir = './data';
+        const logFiles = ['character-container.log', 'api.log', 'events.log'];
+        const allLogs = [];
+        
+        logFiles.forEach(filename => {
+          const logPath = path.join(logsDir, filename);
+          if (fs.existsSync(logPath)) {
+            try {
+              const logContent = fs.readFileSync(logPath, 'utf8');
+              const lines = logContent.split('\n').filter(line => line.trim());
+              
+              lines.forEach(line => {
+                try {
+                  const logEntry = JSON.parse(line);
+                  allLogs.push({
+                    ...logEntry,
+                    source: filename
+                  });
+                } catch (parseError) {
+                  // If line is not JSON, treat as plain text
+                  allLogs.push({
+                    timestamp: new Date().toISOString(),
+                    level: 'info',
+                    message: line,
+                    source: filename
+                  });
+                }
+              });
+            } catch (fileError) {
+              this.logger.error(`Error reading log file ${filename}`, { error: fileError.message });
+            }
+          }
+        });
+        
+        // Sort by timestamp, most recent first
+        allLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        // Return last 500 entries
+        res.json({
+          success: true,
+          logs: allLogs.slice(0, 500),
+          totalCount: allLogs.length
+        });
+      } catch (error) {
+        this.logger.error('Error fetching logs', { error: error.message });
+        res.status(500).json({
+          success: false,
+          error: error.message
+        });
+      }
+    });
+
+    this.logger.info('Web interface routes configured');
   }
 
   // Start the API server

@@ -245,6 +245,19 @@ class FighterCharacter extends CharacterBase {
       }
     };
   }
+
+  // Override to include fighter-specific data in character sheet
+  getClassSpecificData() {
+    return {
+      fighterSpecific: {
+        fightingStyle: this.state.state.fightingStyle,
+        secondWindUsed: this.state.state.secondWindUsed,
+        actionSurgeUsed: this.state.state.actionSurgeUsed,
+        superiorityDice: this.state.state.superiorityDice,
+        maneuvers: this.state.state.maneuvers
+      }
+    };
+  }
 }
 
 // Custom Fighter Combat AI

@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Character Logs - {{CHARACTER_NAME}}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+        }
+
+        .header {
+            background: #2d2d30;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #ffffff;
+            font-size: 18px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .btn-primary { background: #007acc; color: white; }
+        .btn-secondary { background: #5a5a5a; color: white; }
+
+        .log-container {
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 8px;
+            height: 70vh;
+            overflow-y: auto;
+            padding: 15px;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px 0;
+            border-bottom: 1px solid #2d2d30;
+        }
+
+        .log-timestamp {
+            color: #569cd6;
+            font-weight: bold;
+        }
+
+        .log-level {
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            margin: 0 8px;
+        }
+
+        .log-level.info { background: #1e5f99; color: white; }
+        .log-level.warn { background: #f59e0b; color: white; }
+        .log-level.error { background: #dc2626; color: white; }
+        .log-level.debug { background: #7c3aed; color: white; }
+
+        .log-message {
+            color: #d4d4d4;
+        }
+
+        .log-details {
+            color: #9cdcfe;
+            font-size: 12px;
+            margin-left: 20px;
+            display: none;
+        }
+
+        .log-entry:hover .log-details {
+            display: block;
+        }
+
+        .filter-bar {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 5px 12px;
+            border: 1px solid #5a5a5a;
+            background: transparent;
+            color: #d4d4d4;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .filter-btn.active {
+            background: #007acc;
+            border-color: #007acc;
+            color: white;
+        }
+
+        .search-input {
+            padding: 8px 12px;
+            border: 1px solid #5a5a5a;
+            background: #2d2d30;
+            color: #d4d4d4;
+            border-radius: 4px;
+            font-size: 12px;
+            width: 300px;
+        }
+
+        .auto-scroll {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            width: 50px;
+            height: 50px;
+        }
+
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #2d2d30;
+            padding: 8px 20px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><i class="fas fa-file-alt"></i> Character Container Logs</h1>
+        <div class="controls">
+            <button class="btn btn-secondary" onclick="window.close()">
+                <i class="fas fa-times"></i> Close
+            </button>
+            <button class="btn btn-primary" onclick="refreshLogs()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <button class="filter-btn active" data-level="all" onclick="filterLogs('all')">All</button>
+        <button class="filter-btn" data-level="info" onclick="filterLogs('info')">Info</button>
+        <button class="filter-btn" data-level="warn" onclick="filterLogs('warn')">Warning</button>
+        <button class="filter-btn" data-level="error" onclick="filterLogs('error')">Error</button>
+        <button class="filter-btn" data-level="debug" onclick="filterLogs('debug')">Debug</button>
+        
+        <input type="text" class="search-input" placeholder="Search logs..." id="searchInput" onkeyup="searchLogs()">
+        
+        <label style="color: #d4d4d4; font-size: 12px;">
+            <input type="checkbox" id="autoRefresh" checked> Auto-refresh
+        </label>
+    </div>
+
+    <div class="log-container" id="logContainer">
+        <div class="log-entry">
+            <span class="log-timestamp">Loading...</span>
+            <span class="log-message">Fetching log data...</span>
+        </div>
+    </div>
+
+    <button class="auto-scroll" id="autoScrollBtn" onclick="toggleAutoScroll()" title="Toggle Auto-scroll">
+        <i class="fas fa-arrow-down"></i>
+    </button>
+
+    <div class="status-bar">
+        <span id="logCount">0 entries</span>
+        <span id="lastUpdate">Never updated</span>
+    </div>
+
+    <script>
+        let logs = [];
+        let filteredLogs = [];
+        let currentFilter = 'all';
+        let autoScroll = true;
+        let autoRefreshInterval;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLogs();
+            setupAutoRefresh();
+        });
+
+        async function loadLogs() {
+            try {
+                // This would be a real API endpoint for logs
+                // For now, we'll show some sample logs
+                const sampleLogs = generateSampleLogs();
+                logs = sampleLogs;
+                
+                applyFilters();
+                updateDisplay();
+                updateStatus();
+                
+                if (autoScroll) {
+                    scrollToBottom();
+                }
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                showError('Failed to load logs: ' + error.message);
+            }
+        }
+
+        function generateSampleLogs() {
+            const now = new Date();
+            const sampleLogs = [];
+            
+            // Generate recent log entries
+            for (let i = 50; i >= 0; i--) {
+                const timestamp = new Date(now.getTime() - (i * 2000)); // 2 seconds apart
+                const levels = ['info', 'warn', 'error', 'debug'];
+                const level = levels[Math.floor(Math.random() * levels.length)];
+                
+                const messages = {
+                    info: [
+                        'Character state saved successfully',
+                        'API request processed',
+                        'AI decision completed',
+                        'WebSocket connection established',
+                        'Character registered with game system'
+                    ],
+                    warn: [
+                        'Registration attempt failed, retrying',
+                        'High memory usage detected',
+                        'Slow response from game server',
+                        'AI decision took longer than expected'
+                    ],
+                    error: [
+                        'Failed to connect to Redis',
+                        'Database connection timeout',
+                        'Invalid game event received',
+                        'AI processing error'
+                    ],
+                    debug: [
+                        'Processing combat turn event',
+                        'Updating character attributes',
+                        'AI personality calculation',
+                        'State validation completed'
+                    ]
+                };
+                
+                const message = messages[level][Math.floor(Math.random() * messages[level].length)];
+                
+                sampleLogs.push({
+                    timestamp: timestamp.toISOString(),
+                    level: level,
+                    message: message,
+                    details: {
+                        characterId: 'fighter-001',
+                        sessionId: 'session-123',
+                        source: 'character-container'
+                    }
+                });
+            }
+            
+            return sampleLogs.reverse(); // Most recent first
+        }
+
+        function applyFilters() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            filteredLogs = logs.filter(log => {
+                const matchesLevel = currentFilter === 'all' || log.level === currentFilter;
+                const matchesSearch = searchTerm === '' || 
+                    log.message.toLowerCase().includes(searchTerm) ||
+                    log.level.toLowerCase().includes(searchTerm);
+                
+                return matchesLevel && matchesSearch;
+            });
+        }
+
+        function updateDisplay() {
+            const container = document.getElementById('logContainer');
+            container.innerHTML = '';
+            
+            if (filteredLogs.length === 0) {
+                container.innerHTML = '<div class="log-entry"><span class="log-message">No logs match the current filter</span></div>';
+                return;
+            }
+            
+            filteredLogs.forEach(log => {
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                
+                const timestamp = new Date(log.timestamp).toLocaleTimeString();
+                const details = JSON.stringify(log.details, null, 2);
+                
+                entry.innerHTML = `
+                    <span class="log-timestamp">[${timestamp}]</span>
+                    <span class="log-level ${log.level}">${log.level.toUpperCase()}</span>
+                    <span class="log-message">${log.message}</span>
+                    <div class="log-details">${details}</div>
+                `;
+                
+                container.appendChild(entry);
+            });
+        }
+
+        function updateStatus() {
+            document.getElementById('logCount').textContent = `${filteredLogs.length} entries`;
+            document.getElementById('lastUpdate').textContent = `Updated: ${new Date().toLocaleTimeString()}`;
+        }
+
+        function filterLogs(level) {
+            currentFilter = level;
+            
+            // Update button states
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-level="${level}"]`).classList.add('active');
+            
+            applyFilters();
+            updateDisplay();
+            updateStatus();
+        }
+
+        function searchLogs() {
+            applyFilters();
+            updateDisplay();
+            updateStatus();
+        }
+
+        function refreshLogs() {
+            loadLogs();
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('logContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            const btn = document.getElementById('autoScrollBtn');
+            
+            if (autoScroll) {
+                btn.innerHTML = '<i class="fas fa-arrow-down"></i>';
+                btn.style.background = '#007acc';
+                scrollToBottom();
+            } else {
+                btn.innerHTML = '<i class="fas fa-pause"></i>';
+                btn.style.background = '#f59e0b';
+            }
+        }
+
+        function setupAutoRefresh() {
+            const checkbox = document.getElementById('autoRefresh');
+            
+            function updateAutoRefresh() {
+                if (checkbox.checked) {
+                    autoRefreshInterval = setInterval(loadLogs, 5000); // Refresh every 5 seconds
+                } else {
+                    if (autoRefreshInterval) {
+                        clearInterval(autoRefreshInterval);
+                    }
+                }
+            }
+            
+            checkbox.addEventListener('change', updateAutoRefresh);
+            updateAutoRefresh(); // Start immediately
+        }
+
+        function showError(message) {
+            const container = document.getElementById('logContainer');
+            container.innerHTML = `
+                <div class="log-entry">
+                    <span class="log-level error">ERROR</span>
+                    <span class="log-message">${message}</span>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
